@@ -1,8 +1,23 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #070c1a;
+  --foreground: #ecf2ff;
+  --surface: rgba(20, 30, 55, 0.62);
+  --surface-border: rgba(161, 191, 255, 0.24);
+  --brand: #74a8ff;
+  --brand-strong: #4f85ff;
+  --muted: #9aa4bd;
+}
+
+[data-contrast="high"] {
+  --background: #000000;
+  --foreground: #ffffff;
+  --surface: rgba(255, 255, 255, 0.08);
+  --surface-border: rgba(255, 255, 255, 0.55);
+  --brand: #ffff00;
+  --brand-strong: #ffcc00;
+  --muted: #e0e0e0;
 }
 
 @theme inline {
@@ -12,15 +27,30 @@
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
-
 body {
+  min-height: 100dvh;
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-geist-sans), sans-serif;
+}
+
+a {
+  color: inherit;
+}
+
+.glass-panel {
+  background: linear-gradient(155deg, rgba(128, 168, 255, 0.2), var(--surface));
+  border: 1px solid var(--surface-border);
+  backdrop-filter: blur(20px);
+}
+
+@keyframes slideIn {
+  from {
+    transform: translateX(16px);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
 }
