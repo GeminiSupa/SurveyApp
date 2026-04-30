@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Check, ShieldAlert, ArrowRight, ChevronLeft, ChevronRight, Info } from "lucide-react";
+import { Check, ShieldAlert, ArrowRight, ChevronLeft, ChevronRight, Info, Loader2 } from "lucide-react";
 import type { StudyBlock } from "@/lib/types";
 import { createRequestId } from "@/lib/security/request-id";
 import { enqueueRequest, flushQueue } from "@/lib/runtime/offline-queue";
@@ -501,65 +501,72 @@ export function StudyRunner({
   }
 
   return (
-    <section className="flex flex-1 flex-col justify-between">
+    <section className="flex flex-1 flex-col justify-between animate-step">
       {isScreenedOut ? (
-        <div className="flex flex-col items-center justify-center py-12 text-center space-y-6">
-          <div className="mx-auto w-20 h-20 rounded-full bg-rose-500/10 border border-rose-500/20 flex items-center justify-center">
-            <ShieldAlert className="w-10 h-10 text-rose-500" />
+        <div className="flex flex-col items-center justify-center py-16 px-6 text-center space-y-6">
+          <div className="mx-auto w-24 h-24 rounded-full bg-rose-500/10 border border-rose-500/20 flex items-center justify-center shadow-[0_0_30px_rgba(244,63,94,0.1)]">
+            <ShieldAlert className="w-12 h-12 text-rose-500" />
           </div>
-          <div className="space-y-2">
-            <h2 className="text-2xl font-bold">Eligibility Notice</h2>
-            <p className="text-white/60 leading-relaxed max-w-md mx-auto">
+          <div className="space-y-3">
+            <h2 className="text-3xl font-bold tracking-tight">Eligibility Notice</h2>
+            <p className="text-[var(--muted)] leading-relaxed max-w-sm mx-auto text-base">
               {message || "Sorry, you do not meet the requirements for this specific study."}
             </p>
           </div>
-          <div className="pt-4">
-            <p className="text-[10px] uppercase tracking-widest text-white/20">Thank you for your time.</p>
+          <div className="pt-8">
+            <p className="text-[10px] uppercase tracking-[0.3em] text-white/20 font-bold">End of session</p>
           </div>
         </div>
       ) : status === "saved" ? (
-        <div className="flex flex-col items-center justify-center py-12 text-center space-y-6">
-          <div className="mx-auto w-20 h-20 rounded-full bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center">
-            <Check className="w-10 h-10 text-emerald-500" />
+        <div className="flex flex-col items-center justify-center py-20 px-6 text-center space-y-8">
+          <div className="mx-auto w-24 h-24 rounded-full bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center shadow-[0_0_30px_rgba(16,185,129,0.1)]">
+            <Check className="w-12 h-12 text-emerald-500" />
           </div>
-          <div className="space-y-2">
-            <h2 className="text-2xl font-bold">{String(currentBlock?.config?.title || "Submission Received")}</h2>
-            <p className="text-white/60 leading-relaxed max-w-md mx-auto whitespace-pre-wrap">
+          <div className="space-y-3">
+            <h2 className="text-3xl font-bold tracking-tight">{String(currentBlock?.config?.title || "Thank You")}</h2>
+            <p className="text-[var(--muted)] leading-relaxed max-w-sm mx-auto text-lg whitespace-pre-wrap">
               {String(currentBlock?.config?.message || message || "Your responses have been successfully recorded.")}
             </p>
           </div>
-          <div className="pt-4">
-            <p className="text-[10px] uppercase tracking-widest text-white/20">You may now close this window.</p>
+          <div className="pt-12">
+            <p className="text-xs uppercase tracking-[0.3em] text-white/20 font-bold">You may now close this window</p>
           </div>
         </div>
       ) : (
         <>
+          <div className="space-y-6">
       {offline ? (
-        <div className="mb-3 rounded-xl border border-amber-300/20 bg-amber-400/10 p-3 text-xs text-amber-200">
-          Offline mode: your progress is saved and will sync automatically when connection returns.
+        <div className="mb-4 rounded-2xl border border-amber-300/20 bg-amber-400/5 p-4 text-sm text-amber-200 flex items-center gap-3">
+          <div className="h-2 w-2 rounded-full bg-amber-400 animate-pulse" />
+          Offline mode: your progress is saved locally.
         </div>
       ) : null}
-      <div className="mb-4 h-1.5 w-full overflow-hidden rounded-full bg-white/10">
-        <div className="h-full rounded-full bg-[var(--brand)] transition-all duration-300" style={{ width: `${progress}%` }} />
+      <div className="mb-6 h-2 w-full overflow-hidden rounded-full bg-white/5">
+        <div className="h-full rounded-full bg-gradient-to-r from-[var(--brand-strong)] to-[var(--brand)] transition-all duration-700 ease-out" style={{ width: `${progress}%` }} />
       </div>
-      <div className="rounded-2xl border border-white/15 bg-white/5 p-4 transition-all duration-300">
-        <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">{currentBlock.block_type}</p>
-        <h1 className="mt-2 text-xl font-semibold">{currentBlock.label}</h1>
+      <div className="rounded-3xl border border-white/10 bg-white/[0.02] p-6 sm:p-8 backdrop-blur-sm shadow-2xl transition-all duration-300">
+        <div className="flex items-center justify-between mb-6">
+          <p className="text-[10px] uppercase tracking-[0.4em] text-[var(--brand)] font-black opacity-70">{currentBlock.block_type}</p>
+          <p className="text-[10px] text-white/30 font-mono">STEP {idx + 1}/{blocks.length}</p>
+        </div>
+        <h1 className="text-2xl sm:text-3xl font-bold tracking-tight mb-8 leading-tight">{currentBlock.label}</h1>
 
         {currentBlock.block_type === "consent" ? (
-          <div className="space-y-4">
-            <h2 className="text-xl font-bold">{String(currentBlock.config?.title || "Consent Agreement")}</h2>
-            <p className="text-sm text-white/70 leading-relaxed whitespace-pre-wrap">
-              {String(currentBlock.config?.text || "By participating, you agree to allow us to collect and analyze your anonymized data for research purposes.")}
-            </p>
-            <label className="mt-6 flex items-start gap-3 p-4 rounded-xl border border-white/10 bg-white/5 cursor-pointer hover:bg-white/10 transition-all">
+          <div className="space-y-6">
+            <h2 className="text-2xl font-bold tracking-tight text-[var(--brand)]">{String(currentBlock.config?.title || "Consent Agreement")}</h2>
+            <div className="max-h-[300px] overflow-y-auto pr-2 custom-scrollbar">
+              <p className="text-base text-white/80 leading-relaxed whitespace-pre-wrap">
+                {String(currentBlock.config?.text || "By participating, you agree to allow us to collect and analyze your anonymized data for research purposes.")}
+              </p>
+            </div>
+            <label className="flex items-center gap-4 p-5 rounded-2xl border border-white/10 bg-white/5 cursor-pointer hover:bg-white/10 transition-all group">
               <input 
                 type="checkbox" 
                 checked={consent} 
                 onChange={(event) => setConsent(event.target.checked)} 
-                className="mt-1 rounded border-white/20 bg-transparent text-[var(--brand)] focus:ring-[var(--brand)]"
+                className="w-5 h-5 rounded border-white/20 bg-transparent text-[var(--brand)] focus:ring-[var(--brand)] focus:ring-offset-0 transition-all"
               />
-              <span className="text-sm font-medium">I understand and consent to the terms above.</span>
+              <span className="text-base font-semibold group-hover:text-white transition-colors">I understand and consent to the terms</span>
             </label>
           </div>
         ) : null}
@@ -586,40 +593,55 @@ export function StudyRunner({
                   <p className="text-sm font-medium">{String(q.question ?? (isMcq ? "Please select an option:" : "Please rate:"))}</p>
                   
                   {isMcq && (
-                    <div className="grid gap-2">
+                    <div className="grid gap-3">
                       {(Array.isArray(q.options) ? q.options : (isLikert ? [] : ["Strongly disagree", "Neutral", "Strongly agree"])).map((opt: string) => (
                         <button
                           type="button"
                           key={opt}
+                          data-selected={currentAnswer === opt}
                           onClick={() => setAnswers(prev => ({ ...prev, [q.id]: opt }))}
-                          className={`rounded-lg border px-3 py-3 text-left text-sm transition-all ${currentAnswer === opt ? "border-[var(--brand)] bg-[var(--brand)]/10 ring-1 ring-[var(--brand)]" : "border-white/15 hover:bg-white/5"}`}
+                          className="option-btn rounded-2xl px-5 py-4 text-left text-base font-medium flex items-center justify-between group"
                         >
-                          {opt}
+                          <span className="flex-1 break-words pr-4">{opt}</span>
+                          <div className={`w-5 h-5 rounded-full border-2 transition-all flex items-center justify-center ${currentAnswer === opt ? "border-[var(--brand)] bg-[var(--brand)]" : "border-white/20"}`}>
+                            {currentAnswer === opt && <Check className="w-3 h-3 text-black font-bold" />}
+                          </div>
                         </button>
                       ))}
                     </div>
                   )}
 
                   {isLikert && (
-                    <div className="grid gap-2" style={{ gridTemplateColumns: `repeat(${q.scaleSize || 5}, minmax(0, 1fr))` }}>
-                      {Array.from({ length: q.scaleSize || 5 }, (_, i) => i + 1).map((value) => (
-                        <button
-                          key={value}
-                          type="button"
-                          onClick={() => setAnswers(prev => ({ ...prev, [q.id]: value }))}
-                          className={`rounded-lg border py-3 text-sm ${currentAnswer === value ? "border-[var(--brand)] bg-[var(--brand)]/20 ring-1 ring-[var(--brand)]" : "border-white/20 hover:bg-white/5"}`}
-                        >
-                          {value}
-                        </button>
-                      ))}
+                    <div className="flex flex-col gap-4">
+                      <div className="flex flex-wrap gap-2 sm:gap-3 justify-center">
+                        {Array.from({ length: Number(q.scaleSize || 5) }).map((_, idx) => {
+                          const val = idx + 1;
+                          return (
+                            <button
+                              type="button"
+                              key={val}
+                              data-selected={currentAnswer === val}
+                              onClick={() => setAnswers(prev => ({ ...prev, [q.id]: val }))}
+                              className="option-btn w-12 h-12 sm:w-14 sm:h-14 rounded-2xl flex items-center justify-center text-lg font-bold"
+                            >
+                              {val}
+                            </button>
+                          );
+                        })}
+                      </div>
+                      <div className="flex justify-between px-2 text-[10px] uppercase tracking-widest text-white/30 font-bold">
+                        <span>Low Intensity</span>
+                        <span>High Intensity</span>
+                      </div>
                     </div>
                   )}
 
                   {isText && (
-                    <textarea 
-                      value={String(currentAnswer || "")} 
-                      onChange={(event) => setAnswers(prev => ({ ...prev, [q.id]: event.target.value }))} 
-                      className="h-24 w-full rounded-lg border border-white/20 bg-transparent p-2 text-sm focus:border-[var(--brand)] focus:outline-none" 
+                    <textarea
+                      value={String(currentAnswer || "")}
+                      onChange={(e) => setAnswers(prev => ({ ...prev, [q.id]: e.target.value }))}
+                      placeholder="Type your response here..."
+                      className="w-full min-h-[120px] rounded-2xl border border-white/10 bg-white/5 p-5 text-base text-white placeholder:text-white/20 focus:border-[var(--brand)]/50 focus:outline-none focus:ring-1 focus:ring-[var(--brand)]/30 transition-all"
                     />
                   )}
                 </div>
@@ -647,7 +669,7 @@ export function StudyRunner({
                 )}
               </div>
             )}
-            <p className="mt-2 text-xs text-[var(--muted)]">Captured: {choice || "none"}</p>
+            {/* Interaction captured indicator could go here if needed */}
           </div>
         ) : null}
 
@@ -832,13 +854,33 @@ export function StudyRunner({
             </div>
           </div>
         ) : null}
-      </div>
+          </div>
+        </div>
 
-          <div className="sticky bottom-0 mt-6 bg-gradient-to-t from-[#030711] via-[#030711] to-transparent pt-6">
-            <button type="button" onClick={handleNext} disabled={status === "saving"} className="w-full rounded-xl bg-[var(--brand-strong)] px-4 py-3 font-medium text-white disabled:opacity-60">
-              {status === "saving" ? "Saving..." : idx === blocks.length - 1 ? "Submit" : "Next"}
+          <div className="sticky bottom-0 pb-8 pt-10 bg-gradient-to-t from-[#070c1a] via-[#070c1a] to-transparent z-40">
+            <button 
+              type="button" 
+              onClick={handleNext} 
+              disabled={status === "saving"} 
+              className="btn-primary w-full rounded-2xl px-6 py-5 text-lg font-bold shadow-2xl flex items-center justify-center gap-3 active:scale-[0.97] transition-all disabled:opacity-40 disabled:cursor-wait"
+            >
+              {status === "saving" ? (
+                <>
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                  Processing...
+                </>
+              ) : (
+                <>
+                  {idx === blocks.length - 1 ? "Complete Study" : "Continue"}
+                  <ArrowRight className="w-5 h-5" />
+                </>
+              )}
             </button>
-            {message ? <p className={`mt-2 text-center text-sm ${status === "error" ? "text-rose-300" : "text-emerald-300"}`}>{message}</p> : null}
+            {message ? (
+              <p className={`mt-4 text-center text-sm font-semibold px-4 py-2 rounded-xl animate-pulse ${status === "error" ? "text-rose-400 bg-rose-500/10 border border-rose-500/20" : "text-emerald-400 bg-emerald-500/10 border border-emerald-500/20"}`}>
+                {message}
+              </p>
+            ) : null}
           </div>
         </>
       )}

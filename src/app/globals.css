@@ -44,13 +44,71 @@ a {
   backdrop-filter: blur(20px);
 }
 
+/* Mobile-first enhancements */
+@media (max-width: 640px) {
+  :root {
+    --text-base: 0.875rem;
+    --text-lg: 1.125rem;
+    --text-xl: 1.25rem;
+  }
+}
+
+/* Button & Interaction Fixes */
+button {
+  cursor: pointer;
+  touch-action: manipulation;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+  overflow: hidden;
+}
+
+button:active {
+  transform: scale(0.98);
+}
+
+/* Ensure text is ALWAYS visible on interactive elements */
+.btn-primary {
+  background-color: var(--brand-strong);
+  color: white !important;
+  font-weight: 600;
+}
+
+.btn-primary:hover {
+  background-color: var(--brand);
+  color: white !important;
+  box-shadow: 0 0 15px rgba(116, 168, 255, 0.4);
+}
+
+.option-btn {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: var(--foreground) !important;
+}
+
+.option-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: var(--brand);
+  color: white !important;
+}
+
+.option-btn[data-selected="true"] {
+  background: rgba(116, 168, 255, 0.15);
+  border-color: var(--brand);
+  color: var(--brand) !important;
+  box-shadow: 0 0 0 1px var(--brand);
+}
+
 @keyframes slideIn {
   from {
-    transform: translateX(16px);
+    transform: translateY(10px);
     opacity: 0;
   }
   to {
-    transform: translateX(0);
+    transform: translateY(0);
     opacity: 1;
   }
+}
+
+.animate-step {
+  animation: slideIn 0.4s ease-out forwards;
 }

@@ -11,6 +11,7 @@ type Payload = {
   blocks: Array<{ id?: string; blockType: string; label: string; config: Record<string, unknown>; sortOrder: number }>;
   logicRules?: Array<{ source_block_id: string; condition: Record<string, unknown>; target_block_id: string | null; terminate: boolean }>;
   disqualificationRules?: Array<{ condition: Record<string, unknown>; disqualify_message: string }>;
+  status?: "draft" | "published";
 };
 
 function slugify(input: string) {
