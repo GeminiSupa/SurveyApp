@@ -46,7 +46,10 @@ export async function POST(request: Request) {
     durationMs?: number;
   } | null;
 
-    if (!body?.studyId || !body.sessionId || !body.participantToken || !body.consentAccepted || !Array.isArray(body.responses)) {
+    if (!body?.studyId || !body.sessionId || !body.participantToken || !Array.isArray(body.responses)) {
+      return NextResponse.json({ error: "Invalid completion payload." }, { status: 400 });
+    }
+    if (body.consentAccepted !== undefined && typeof body.consentAccepted !== "boolean") {
       return NextResponse.json({ error: "Invalid completion payload." }, { status: 400 });
     }
 
@@ -68,7 +71,7 @@ export async function POST(request: Request) {
       study_id: body.studyId,
       participant_session_id: body.sessionId,
       consent_text_version: "v1",
-      accepted: true,
+      accepted: body.consentAccepted ?? false,
     });
 
     if (body.responses.length) {

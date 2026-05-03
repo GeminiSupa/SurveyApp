@@ -65,6 +65,10 @@ export function StudyRunner({
   const [responseMap, setResponseMap] = useState<Record<string, unknown>>({});
   const [isScreenedOut, setIsScreenedOut] = useState(false);
   const [brsRatings, setBrsRatings] = useState<Record<string, number>>({});
+  const hasConsentBlock = useMemo(
+    () => blocks.some((block) => block.block_type === "consent"),
+    [blocks],
+  );
   
   // RT specific state
   const [rtTrialIdx, setRtTrialIdx] = useState(0);
@@ -258,6 +262,8 @@ export function StudyRunner({
 
   function collectCurrentResponse() {
     if (!currentBlock) return;
+    const responseAdditions: ResponseItem[] = [];
+    const responseMapAdditions: Record<string, unknown> = {};
     
     // For legacy single questions or multi-questions
     const qs = Array.isArray(currentBlock.config?.questions) 
@@ -279,26 +285,23 @@ export function StudyRunner({
         if (q.surveyType === "open_text") rType = "text";
         
         const qk = String(currentBlock.config?.questionKey ?? `${rType}_${q.id}`);
-        setResponses((prev) => [...prev, { 
+        responseAdditions.push({
           questionKey: qk, 
           responseType: rType, 
           textValue: rType !== "likert" ? String(val) : undefined,
           numericValue: rType === "likert" ? Number(val) : undefined 
-        }]);
-        setResponseMap((prev) => ({ ...prev, [qk]: val }));
+        });
+        responseMapAdditions[qk] = val;
       });
     }
 
     if (currentBlock.block_type === "ux_task") {
       const choice = answers[`ux_${currentBlock.id}`] as string;
-      setResponses((prev) => [
-        ...prev,
-        {
-          questionKey: `ux_${currentBlock.id}`,
-          responseType: "task",
-          jsonValue: { taskType: currentBlock.config?.taskType ?? "first_click", value: choice || "captured" },
-        },
-      ]);
+      responseAdditions.push({
+        questionKey: `ux_${currentBlock.id}`,
+        responseType: "task",
+        jsonValue: { taskType: currentBlock.config?.taskType ?? "first_click", value: choice || "captured" },
+      });
     }
     if (currentBlock.block_type === "reaction_time") {
       // Data already collected in handleRtInput
@@ -306,12 +309,12 @@ export function StudyRunner({
         .filter(t => t.trialType === "reaction_time" && t.isCorrect)
         .reduce((acc, t) => acc + (t.reactionTimeMs || 0), 0) / (trials.length || 1);
       
-      setResponses((prev) => [...prev, { 
+      responseAdditions.push({ 
         questionKey: `rt_${currentBlock.id}`, 
         responseType: "time_ms", 
         numericValue: avgRt,
         jsonValue: { trialCount: trials.length }
-      }]);
+      });
     }
     if (currentBlock.block_type === "brs") {
       const items: Array<{ id: string; text: string; reversed: boolean }> = Array.isArray(currentBlock.config?.items) ? currentBlock.config.items : [];
@@ -325,14 +328,48 @@ export function StudyRunner({
       });
       const meanScore = items.length > 0 ? total / items.length : 0;
       const qk = `brs_${currentBlock.id}`;
-      setResponses((prev) => [...prev, {
+      responseAdditions.push({
         questionKey: qk,
         responseType: "likert",
         numericValue: parseFloat(meanScore.toFixed(2)),
         jsonValue: { rawRatings: brsRatings, scoredItems, meanScore: parseFloat(meanScore.toFixed(2)), itemCount: items.length },
-      }]);
-      setResponseMap((prev) => ({ ...prev, [qk]: meanScore }));
+      });
+      responseMapAdditions[qk] = meanScore;
     }
+    if (responseAdditions.length) {
+      setResponses((prev) => [...prev, ...responseAdditions]);
+    }
+    if (Object.keys(responseMapAdditions).length) {
+      setResponseMap((prev) => ({ ...prev, ...responseMapAdditions }));
+    }
+    return { responseAdditions, responseMapAdditions };
+  }
+
+  async function submitCompletion(allResponses: ResponseItem[], completionMessage: string) {
+    if (!sessionId || !participantToken) return false;
+    setStatus("saving");
+    const response = await fetch("/api/participant/complete", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "x-request-id": createRequestId() },
+      body: JSON.stringify({
+        studyId: studyDbId,
+        sessionId,
+        participantToken,
+        consentAccepted: hasConsentBlock ? consent : true,
+        responses: allResponses,
+        trials,
+        durationMs: Date.now() - sessionStartedAt,
+      }),
+    });
+    if (!response.ok) {
+      const data = (await response.json()) as { error?: string };
+      setStatus("error");
+      setMessage(data.error ?? "Submission failed.");
+      return false;
+    }
+    setStatus("saved");
+    setMessage(completionMessage);
+    return true;
   }
 
   async function handleNext() {
@@ -377,11 +414,13 @@ export function StudyRunner({
       }
     }
 
-    collectCurrentResponse();
-    const dq = isDisqualified(disqualificationRules ?? [], responseMap);
+    const collected = collectCurrentResponse();
+    const nextResponseMap = { ...responseMap, ...(collected?.responseMapAdditions ?? {}) };
+    const nextResponses = [...responses, ...(collected?.responseAdditions ?? [])];
+    const dq = isDisqualified(disqualificationRules ?? [], nextResponseMap);
     if (dq.disqualified) {
-      setIsScreenedOut(true);
-      setMessage(dq.message);
+      const completed = await submitCompletion(nextResponses, dq.message || "You do not meet this study's eligibility requirements.");
+      if (completed) setIsScreenedOut(true);
       return;
     }
     await logEvent("question_completed", { blockType: currentBlock.block_type, idx });
@@ -389,11 +428,10 @@ export function StudyRunner({
     const nextDecision = applyLogicNextBlockId({
       currentBlockId: currentBlock.id,
       rules: logicRules ?? [],
-      responses: responseMap,
+      responses: nextResponseMap,
     });
     if (nextDecision.terminate) {
-      setStatus("saved");
-      setMessage("Thank you. This session has ended.");
+      await submitCompletion(nextResponses, "Thank you. This session has ended.");
       return;
     }
 
@@ -416,29 +454,7 @@ export function StudyRunner({
       return;
     }
 
-    if (!sessionId || !participantToken) return;
-    setStatus("saving");
-    const response = await fetch("/api/participant/complete", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "x-request-id": createRequestId() },
-      body: JSON.stringify({
-        studyId: studyDbId,
-        sessionId,
-        participantToken,
-        consentAccepted: consent,
-        responses,
-        trials,
-        durationMs: Date.now() - sessionStartedAt,
-      }),
-    });
-    if (!response.ok) {
-      const data = (await response.json()) as { error?: string };
-      setStatus("error");
-      setMessage(data.error ?? "Submission failed.");
-      return;
-    }
-    setStatus("saved");
-    setMessage("Submitted. Thank you for participating.");
+    await submitCompletion(nextResponses, "Submitted. Thank you for participating.");
   }
 
   function handleFirstClick(event: React.MouseEvent<HTMLDivElement>) {
