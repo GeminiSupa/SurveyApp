@@ -11,6 +11,13 @@ function getAllowedOrigins() {
   const origins = new Set<string>();
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL;
   if (siteUrl) origins.add(siteUrl.replace(/\/$/, ""));
+  const extra = process.env.NEXT_PUBLIC_ALLOWED_ORIGINS;
+  if (extra) {
+    for (const raw of extra.split(",")) {
+      const v = raw.trim();
+      if (v) origins.add(v.replace(/\/$/, ""));
+    }
+  }
   origins.add("http://localhost:3000");
   origins.add("http://127.0.0.1:3000");
   return origins;
@@ -23,9 +30,18 @@ export function getClientIp(request: Request) {
 }
 
 export function requireTrustedOrigin(request: Request): GuardResult {
-  const origin = request.headers.get("origin");
+  const origin = request.headers.get("origin")?.replace(/\/$/, "") ?? null;
+  const host = request.headers.get("host")?.replace(/\/$/, "") ?? null;
   const allowed = getAllowedOrigins();
-  if (!origin || !allowed.has(origin.replace(/\/$/, ""))) {
+
+  // Some navigations / same-origin / certain proxies may omit Origin.
+  // In that case, fall back to Host-based allowlist to avoid blocking legitimate requests.
+  if (!origin) {
+    if (host && allowed.has(`https://${host}`)) return { ok: true };
+    if (host && allowed.has(`http://${host}`)) return { ok: true };
+    return { ok: false, response: NextResponse.json({ error: "Untrusted origin." }, { status: 403 }) };
+  }
+  if (!allowed.has(origin)) {
     return { ok: false, response: NextResponse.json({ error: "Untrusted origin." }, { status: 403 }) };
   }
   return { ok: true };
