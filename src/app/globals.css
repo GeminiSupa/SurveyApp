@@ -112,3 +112,70 @@ button:active {
 .animate-step {
   animation: slideIn 0.4s ease-out forwards;
 }
+
+/* Marketing tool cards */
+.tool-card {
+  transition:
+    transform 0.25s cubic-bezier(0.4, 0, 0.2, 1),
+    border-color 0.25s cubic-bezier(0.4, 0, 0.2, 1),
+    box-shadow 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.tool-card:hover {
+  transform: translateY(-3px);
+  border-color: rgba(116, 168, 255, 0.35);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.35);
+}
+
+/* Band chips for results */
+.band-chip {
+  border-radius: 9999px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  padding: 0.25rem 0.6rem;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  background: rgba(255, 255, 255, 0.04);
+  color: rgba(255, 255, 255, 0.75);
+}
+
+.band-emerald {
+  border-color: rgba(16, 185, 129, 0.35);
+  background: rgba(16, 185, 129, 0.12);
+  color: rgba(110, 231, 183, 0.95);
+}
+
+.band-amber {
+  border-color: rgba(245, 158, 11, 0.35);
+  background: rgba(245, 158, 11, 0.12);
+  color: rgba(252, 211, 77, 0.95);
+}
+
+.band-rose {
+  border-color: rgba(244, 63, 94, 0.35);
+  background: rgba(244, 63, 94, 0.12);
+  color: rgba(251, 113, 133, 0.95);
+}
+
+.band-violet {
+  border-color: rgba(167, 139, 250, 0.35);
+  background: rgba(167, 139, 250, 0.12);
+  color: rgba(216, 180, 254, 0.95);
+}
+
+.band-blue {
+  border-color: rgba(116, 168, 255, 0.35);
+  background: rgba(116, 168, 255, 0.12);
+  color: rgba(186, 210, 255, 0.95);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tool-card,
+  button {
+    transition: none;
+  }
+  .animate-step {
+    animation: none;
+  }
+}

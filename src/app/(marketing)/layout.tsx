@@ -12,6 +12,9 @@ export default function MarketingLayout({
         </Link>
         <nav className="flex items-center gap-2 text-xs sm:text-sm">
           <HighContrastToggle />
+          <Link className="rounded-full px-3 py-1.5 hover:bg-white/10" href="/tools/resilience">
+            Tools
+          </Link>
           <Link className="rounded-full px-3 py-1.5 hover:bg-white/10" href="/admin/dashboard">
             Dashboard
           </Link>
