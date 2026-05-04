@@ -27,6 +27,15 @@ export default function LandingPage() {
             <Link className="rounded-xl border border-white/20 px-4 py-2 text-sm" href="/tools/personality">
               Personality snapshot (Big Five)
             </Link>
+            <Link className="rounded-xl border border-white/20 px-4 py-2 text-sm" href="/tools/phq9">
+              PHQ-9 mood check
+            </Link>
+            <Link className="rounded-xl border border-white/20 px-4 py-2 text-sm" href="/tools/gad7">
+              GAD-7 anxiety check
+            </Link>
+            <Link className="rounded-xl border border-white/20 px-4 py-2 text-sm" href="/tools/who5">
+              WHO-5 wellbeing
+            </Link>
           </div>
           <div className="mt-5 flex flex-wrap gap-3">
             <Link className="rounded-xl border border-white/15 px-4 py-2 text-sm" href="/participant/demo">
@@ -39,7 +48,7 @@ export default function LandingPage() {
         </div>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-3">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {[
           {
             title: "Resilience (BRS)",
@@ -58,6 +67,24 @@ export default function LandingPage() {
             desc: "Big Five snapshot: O, C, E, A, N.",
             href: "/tools/personality",
             img: "https://images.unsplash.com/photo-1526498460520-4c246339dccb?w=1200&auto=format&fit=crop&q=60",
+          },
+          {
+            title: "PHQ-9",
+            desc: "Quick depression symptom screen.",
+            href: "/tools/phq9",
+            img: "https://images.unsplash.com/photo-1476908965434-9d8505f8cccf?w=1200&auto=format&fit=crop&q=60",
+          },
+          {
+            title: "GAD-7",
+            desc: "Short anxiety symptom check.",
+            href: "/tools/gad7",
+            img: "https://images.unsplash.com/photo-1498050108023-c5249f4df085?w=1200&auto=format&fit=crop&q=60",
+          },
+          {
+            title: "WHO-5 wellbeing",
+            desc: "Positive wellbeing snapshot.",
+            href: "/tools/who5",
+            img: "https://images.unsplash.com/photo-1441974231531-c6227db76b6e?w=1200&auto=format&fit=crop&q=60",
           },
         ].map((card) => (
           <Link key={card.href} href={card.href} className="tool-card glass-panel group overflow-hidden rounded-3xl">
