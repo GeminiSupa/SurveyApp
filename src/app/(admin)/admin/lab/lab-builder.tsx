@@ -6,6 +6,7 @@ import { createRequestId } from "@/lib/security/request-id";
 import { Reorder } from "framer-motion";
 import { Trash, Edit, GripVertical, Check, Sparkles, X, Plus, GitBranch, ShieldAlert, Link as LinkIcon, Copy, Loader2, Wand2, FileText } from "lucide-react";
 import type { LogicRule, DisqualificationRule } from "@/lib/runtime/logic";
+import { QUESTIONNAIRE_LIBRARY, type StudyPreset } from "@/lib/tools/study-presets";
 
 type BuilderBlock = {
   id: string; // needed for framer-motion Reorder
@@ -22,19 +23,6 @@ const presets: Omit<BuilderBlock, "id">[] = [
   { blockType: "ux_task", label: "Click Test", config: { taskType: "first_click", prompt: "Tap where you would begin.", imageUrl: "" } },
   { blockType: "reaction_time", label: "Reaction Time", config: { instruction: "Tap only when you see a Color.", stimulusType: "text", stimuli: ["Red", "Blue", "Circle", "Square"], targetStimuli: ["Red", "Blue"], trialCount: 10, fixationMs: 500, minDelayMs: 1000, maxDelayMs: 2000 } },
   { blockType: "iat", label: "IAT Block", config: { leftLabel: "Design", rightLabel: "Non-Design", stimuli: ["Wireframe", "Analytics", "Prototype", "Survey"], required: true } },
-  { blockType: "brs", label: "Brief Resilience Scale", config: {
-    instruction: "Please respond to each item by marking one box per row.",
-    scaleLabels: ["Strongly Disagree", "Disagree", "Neutral", "Agree", "Strongly Agree"],
-    items: [
-      { id: "brs1", text: "I tend to bounce back quickly after hard times.", reversed: false },
-      { id: "brs2", text: "I have a hard time making it through stressful events.", reversed: true },
-      { id: "brs3", text: "It does not take me long to recover from a stressful event.", reversed: false },
-      { id: "brs4", text: "It is hard for me to snap back when something bad happens.", reversed: true },
-      { id: "brs5", text: "I usually come through difficult times with little trouble.", reversed: false },
-      { id: "brs6", text: "I tend to take a long time to get over set-backs in my life.", reversed: true },
-    ],
-    required: true,
-  }},
   { blockType: "thank_you", label: "Thank You", config: { title: "Study Complete", message: "Thank you for your participation! Your responses have been recorded.", showSummary: false } },
 ];
 
@@ -157,6 +145,80 @@ export function LabBuilder() {
     }
     
     setBlocks((prev) => [...prev, newBlock]);
+  }
+
+  function addQuestionnaireFromLibrary(preset: StudyPreset) {
+    if (preset.key === "brs" && "brsItems" in preset && preset.brsItems) {
+      const newBlock: BuilderBlock = {
+        id: crypto.randomUUID(),
+        blockType: "brs",
+        label: preset.blockLabel,
+        config: {
+          instruction:
+            preset.instruction ?? "Please respond to each item by marking one box per row.",
+          scaleLabels:
+            preset.scaleLabels ?? ["Strongly Disagree", "Disagree", "Neutral", "Agree", "Strongly Agree"],
+          items: preset.brsItems.map((item) => ({
+            id: crypto.randomUUID(),
+            text: item.text,
+            reversed: item.reversed,
+          })),
+          required: true,
+        },
+      };
+      setBlocks((prev) => [...prev, newBlock]);
+      return;
+    }
+    const qs = "questions" in preset ? preset.questions : [];
+    const newBlock: BuilderBlock = {
+      id: crypto.randomUUID(),
+      blockType: "survey",
+      label: preset.blockLabel,
+      config: {
+        instruction: preset.instruction,
+        scaleLabels: preset.scaleLabels,
+        questions: qs.map((q) => ({
+          id: crypto.randomUUID(),
+          question: q.question,
+          surveyType: q.surveyType,
+          scaleSize: q.scaleSize,
+          options: q.options,
+          reversed: q.reversed,
+        })),
+        required: true,
+      },
+    };
+    setBlocks((prev) => [...prev, newBlock]);
+  }
+
+  function convertBrsBlockToSurvey(blockId: string) {
+    setBlocks((prev) =>
+      prev.map((b) => {
+        if (b.id !== blockId || b.blockType !== "brs") return b;
+        const items: Array<{ id?: string; text: string; reversed?: boolean }> = Array.isArray(b.config.items)
+          ? b.config.items
+          : [];
+        const scaleLen = Math.max(3, Math.min(10, (b.config.scaleLabels as string[] | undefined)?.length || 5));
+        return {
+          ...b,
+          blockType: "survey" as const,
+          config: {
+            instruction: b.config.instruction,
+            scaleLabels: b.config.scaleLabels,
+            required: b.config.required !== false,
+            questions: items.map((item) => ({
+              id: item.id ?? crypto.randomUUID(),
+              question: item.text,
+              surveyType: "likert" as const,
+              scaleSize: scaleLen,
+              reversed: !!item.reversed,
+            })),
+            items: undefined,
+          },
+        };
+      }),
+    );
+    setMessage("Converted BRS block to a standard Likert survey block. You can change items to MCQ or open text.");
   }
 
   function deleteBlock(id: string) {
@@ -403,6 +465,7 @@ export function LabBuilder() {
       <div className="grid gap-4 md:grid-cols-[200px_1fr_280px]">
         <div className="rounded-xl border border-dashed border-white/25 p-3">
           <p className="mb-3 text-xs uppercase tracking-[0.16em] text-[var(--muted)]">Toolbox</p>
+          <p className="mb-2 text-[10px] uppercase tracking-widest text-white/35">Building blocks</p>
           <div className="grid gap-2">
             {presets.map((block) => (
               <button
@@ -415,7 +478,23 @@ export function LabBuilder() {
                 <Plus className="w-3 h-3 opacity-0 group-hover:opacity-40 transition-opacity" />
               </button>
             ))}
-            <div className="mt-4 pt-4 border-t border-white/10">
+          </div>
+          <p className="mt-4 mb-2 text-[10px] uppercase tracking-widest text-white/35">Questionnaire library</p>
+          <div className="grid gap-2 max-h-[280px] overflow-y-auto pr-1 custom-scrollbar">
+            {QUESTIONNAIRE_LIBRARY.map((preset) => (
+              <button
+                key={preset.key}
+                type="button"
+                title={preset.description}
+                className="rounded-lg border border-violet-500/20 px-3 py-2 text-left text-sm hover:bg-violet-500/10 transition-colors group flex items-center justify-between"
+                onClick={() => addQuestionnaireFromLibrary(preset)}
+              >
+                <span className="text-violet-200/90">+ {preset.label}</span>
+                <Plus className="w-3 h-3 opacity-0 group-hover:opacity-40 transition-opacity text-violet-300" />
+              </button>
+            ))}
+          </div>
+          <div className="mt-4 pt-4 border-t border-white/10">
               <button
                 type="button"
                 onClick={() => setIsBulkModalOpen(true)}
@@ -424,7 +503,6 @@ export function LabBuilder() {
                 <Sparkles className="w-4 h-4" />
                 Bulk Import
               </button>
-            </div>
           </div>
         </div>
         
@@ -544,76 +622,199 @@ export function LabBuilder() {
 
                     {(block.blockType === "survey" || block.blockType === "multiple_choice") && (
                       <div className="grid gap-3">
+                        {block.blockType === "survey" && (
+                          <>
+                            <div>
+                              <label className="block text-xs text-white/60 mb-1">Block instructions (optional)</label>
+                              <textarea
+                                value={block.config.instruction || ""}
+                                onChange={(e) => updateBlockConfig(block.id, { instruction: e.target.value })}
+                                className="w-full rounded-md border border-white/10 bg-transparent px-2 py-1.5 h-20"
+                                placeholder="Shown above all questions on this page..."
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-xs text-white/60 mb-1">
+                                Scale labels (comma separated, optional)
+                              </label>
+                              <input
+                                value={(block.config.scaleLabels || []).join(", ")}
+                                onChange={(e) =>
+                                  updateBlockConfig(block.id, {
+                                    scaleLabels: e.target.value
+                                      .split(",")
+                                      .map((s: string) => s.trim())
+                                      .filter(Boolean),
+                                  })
+                                }
+                                className="w-full rounded-md border border-white/10 bg-transparent px-2 py-1.5"
+                                placeholder="Left → right anchors for Likert buttons (count should match scale size)"
+                              />
+                            </div>
+                          </>
+                        )}
                         <div className="space-y-3">
-                          {(block.config.questions || []).map((q: any, qIndex: number) => (
-                            <div key={q.id} className="p-3 rounded-lg border border-white/10 bg-white/5 space-y-3 relative">
-                              <button 
-                                onClick={() => {
-                                  const questions = [...block.config.questions];
-                                  questions.splice(qIndex, 1);
-                                  updateBlockConfig(block.id, { questions });
-                                }}
-                                className="absolute top-2 right-2 p-1 text-white/40 hover:text-rose-400"
+                          {(block.config.questions || []).map((q: any, qIndex: number) => {
+                            const effectiveType =
+                              q.surveyType ||
+                              (block.blockType === "multiple_choice" ? "mcq" : "likert");
+                            return (
+                              <div
+                                key={q.id}
+                                className="p-3 rounded-lg border border-white/10 bg-white/5 space-y-3 relative"
                               >
-                                <Trash className="w-3.5 h-3.5" />
-                              </button>
-                              
-                              <div>
-                                <label className="block text-xs text-white/60 mb-1">Question {qIndex + 1}</label>
-                                <input 
-                                  value={q.question || ""}
-                                  onChange={(e) => {
+                                <button
+                                  type="button"
+                                  onClick={() => {
                                     const questions = [...block.config.questions];
-                                    questions[qIndex] = { ...q, question: e.target.value };
+                                    questions.splice(qIndex, 1);
                                     updateBlockConfig(block.id, { questions });
                                   }}
-                                  className="w-full rounded-md border border-white/10 bg-transparent px-2 py-1.5 pr-8"
-                                  placeholder="e.g. How easy was it to navigate?"
-                                />
+                                  className="absolute top-2 right-2 p-1 text-white/40 hover:text-rose-400"
+                                >
+                                  <Trash className="w-3.5 h-3.5" />
+                                </button>
+
+                                <div className="grid gap-2 sm:grid-cols-2 pr-6">
+                                  <div>
+                                    <label className="block text-xs text-white/60 mb-1">
+                                      Question {qIndex + 1}
+                                    </label>
+                                    <input
+                                      value={q.question || ""}
+                                      onChange={(e) => {
+                                        const questions = [...block.config.questions];
+                                        questions[qIndex] = { ...q, question: e.target.value };
+                                        updateBlockConfig(block.id, { questions });
+                                      }}
+                                      className="w-full rounded-md border border-white/10 bg-transparent px-2 py-1.5"
+                                      placeholder="Question text"
+                                    />
+                                  </div>
+                                  <div>
+                                    <label className="block text-xs text-white/60 mb-1">Response type</label>
+                                    <select
+                                      value={effectiveType}
+                                      onChange={(e) => {
+                                        const nextType = e.target.value as "likert" | "mcq" | "open_text";
+                                        const questions = [...block.config.questions];
+                                        let nextQ: Record<string, unknown> = { ...q, surveyType: nextType };
+                                        if (nextType === "likert") {
+                                          nextQ = {
+                                            ...q,
+                                            surveyType: nextType,
+                                            scaleSize: q.scaleSize || 5,
+                                            options: undefined,
+                                          };
+                                        } else if (nextType === "mcq") {
+                                          nextQ = {
+                                            ...q,
+                                            surveyType: nextType,
+                                            scaleSize: undefined,
+                                            reversed: undefined,
+                                            options:
+                                              Array.isArray(q.options) && q.options.length
+                                                ? q.options
+                                                : ["Option 1", "Option 2"],
+                                          };
+                                        } else {
+                                          nextQ = {
+                                            ...q,
+                                            surveyType: nextType,
+                                            scaleSize: undefined,
+                                            options: undefined,
+                                            reversed: undefined,
+                                          };
+                                        }
+                                        questions[qIndex] = nextQ;
+                                        updateBlockConfig(block.id, { questions });
+                                      }}
+                                      className="w-full rounded-md border border-white/10 bg-[#091126] px-2 py-1.5"
+                                    >
+                                      <option value="likert">Likert (numeric)</option>
+                                      <option value="mcq">Multiple choice</option>
+                                      <option value="open_text">Open text</option>
+                                    </select>
+                                  </div>
+                                </div>
+
+                                {effectiveType === "likert" && (
+                                  <>
+                                    <div className="grid gap-2 sm:grid-cols-2">
+                                      <div>
+                                        <label className="block text-xs text-white/60 mb-1">
+                                          Scale size (points)
+                                        </label>
+                                        <input
+                                          type="number"
+                                          min="3"
+                                          max="11"
+                                          value={q.scaleSize || 5}
+                                          onChange={(e) => {
+                                            const questions = [...block.config.questions];
+                                            questions[qIndex] = {
+                                              ...q,
+                                              scaleSize: parseInt(e.target.value, 10) || 5,
+                                            };
+                                            updateBlockConfig(block.id, { questions });
+                                          }}
+                                          className="w-full rounded-md border border-white/10 bg-transparent px-2 py-1.5"
+                                        />
+                                      </div>
+                                      <div className="flex items-end pb-1">
+                                        <label className="flex items-center gap-2 text-xs text-white/60 cursor-pointer select-none">
+                                          <input
+                                            type="checkbox"
+                                            checked={!!q.reversed}
+                                            onChange={(e) => {
+                                              const questions = [...block.config.questions];
+                                              questions[qIndex] = { ...q, reversed: e.target.checked };
+                                              updateBlockConfig(block.id, { questions });
+                                            }}
+                                            className="rounded border-white/20 bg-transparent"
+                                          />
+                                          Reverse-scored item
+                                        </label>
+                                      </div>
+                                    </div>
+                                  </>
+                                )}
+
+                                {effectiveType === "mcq" && (
+                                  <div>
+                                    <label className="block text-xs text-white/60 mb-1">
+                                      Options (comma separated)
+                                    </label>
+                                    <input
+                                      value={(q.options || []).join(", ")}
+                                      onChange={(e) => {
+                                        const questions = [...block.config.questions];
+                                        questions[qIndex] = {
+                                          ...q,
+                                          options: e.target.value.split(",").map((s: string) => s.trim()),
+                                        };
+                                        updateBlockConfig(block.id, { questions });
+                                      }}
+                                      className="w-full rounded-md border border-white/10 bg-transparent px-2 py-1.5"
+                                      placeholder="Option A, Option B, Option C"
+                                    />
+                                  </div>
+                                )}
                               </div>
-
-                              {block.blockType === "survey" && (
-                                <div>
-                                  <label className="block text-xs text-white/60 mb-1">Scale Size (e.g., 5 or 7)</label>
-                                  <input 
-                                    type="number"
-                                    min="3" max="10"
-                                    value={q.scaleSize || 5}
-                                    onChange={(e) => {
-                                      const questions = [...block.config.questions];
-                                      questions[qIndex] = { ...q, scaleSize: parseInt(e.target.value) || 5 };
-                                      updateBlockConfig(block.id, { questions });
-                                    }}
-                                    className="w-full rounded-md border border-white/10 bg-transparent px-2 py-1.5"
-                                  />
-                                </div>
-                              )}
-
-                              {block.blockType === "multiple_choice" && (
-                                <div>
-                                  <label className="block text-xs text-white/60 mb-1">Options (comma separated)</label>
-                                  <input 
-                                    value={(q.options || []).join(", ")}
-                                    onChange={(e) => {
-                                      const questions = [...block.config.questions];
-                                      questions[qIndex] = { ...q, options: e.target.value.split(",").map((s: string) => s.trim()) };
-                                      updateBlockConfig(block.id, { questions });
-                                    }}
-                                    className="w-full rounded-md border border-white/10 bg-transparent px-2 py-1.5"
-                                    placeholder="Option A, Option B, Option C"
-                                  />
-                                </div>
-                              )}
-                            </div>
-                          ))}
+                            );
+                          })}
                         </div>
                         <button
+                          type="button"
                           onClick={() => {
                             const questions = [...(block.config.questions || [])];
-                            questions.push({ 
-                              id: crypto.randomUUID(), 
-                              question: "New Question", 
-                              ...(block.blockType === "multiple_choice" ? { options: ["Option 1", "Option 2"] } : { scaleSize: 5 }) 
+                            questions.push({
+                              id: crypto.randomUUID(),
+                              question: "New Question",
+                              surveyType: block.blockType === "multiple_choice" ? "mcq" : "likert",
+                              ...(block.blockType === "multiple_choice"
+                                ? { options: ["Option 1", "Option 2"] }
+                                : { scaleSize: 5 }),
                             });
                             updateBlockConfig(block.id, { questions });
                           }}
@@ -767,16 +968,26 @@ export function LabBuilder() {
                         <div className="p-3 rounded-lg border border-violet-500/20 bg-violet-500/5">
                           <div className="flex items-center gap-2 mb-2">
                             <div className="w-2 h-2 rounded-full bg-violet-400" />
-                            <p className="text-[10px] uppercase tracking-widest text-violet-300 font-bold">Brief Resilience Scale (Smith et al., 2008)</p>
+                            <p className="text-[10px] uppercase tracking-widest text-violet-300 font-bold">
+                              Brief Resilience Scale (Smith et al., 2008)
+                            </p>
                           </div>
                           <p className="text-xs text-white/50 leading-relaxed">
-                            A validated 6-item measure of resilience. Items 2, 4, and 6 are automatically reverse-scored.
-                            The final BRS score is the mean of all items (range 1.00–5.00).
+                            Each item is saved as its own score (reverse-scoring applied when marked). Add or remove
+                            items below, or convert to a standard Likert block to switch individual items to MCQ or
+                            open text.
                           </p>
                         </div>
+                        <button
+                          type="button"
+                          onClick={() => convertBrsBlockToSurvey(block.id)}
+                          className="rounded-lg border border-white/15 bg-white/5 px-3 py-2 text-left text-xs font-medium text-white/80 hover:bg-white/10 transition-colors"
+                        >
+                          Convert to standard Likert block (enables MCQ / open text per row)
+                        </button>
                         <div>
                           <label className="block text-xs text-white/60 mb-1">Instructions</label>
-                          <input 
+                          <input
                             value={block.config.instruction || ""}
                             onChange={(e) => updateBlockConfig(block.id, { instruction: e.target.value })}
                             className="w-full rounded-md border border-white/10 bg-transparent px-2 py-1.5"
@@ -785,36 +996,84 @@ export function LabBuilder() {
                         <div>
                           <label className="block text-xs text-white/60 mb-2">Items</label>
                           <div className="space-y-2">
-                            {(block.config.items || []).map((item: { id: string; text: string; reversed: boolean }, i: number) => (
-                              <div key={item.id} className={`flex items-start gap-2 p-2.5 rounded-lg border text-xs ${
-                                item.reversed 
-                                  ? "border-amber-500/15 bg-amber-500/5" 
-                                  : "border-white/10 bg-black/20"
-                              }`}>
-                                <span className="shrink-0 w-5 h-5 rounded-full bg-white/10 flex items-center justify-center text-[10px] font-bold text-white/50 mt-0.5">{i + 1}</span>
-                                <input 
-                                  value={item.text}
-                                  onChange={(e) => {
-                                    const updated = [...(block.config.items || [])];
-                                    updated[i] = { ...updated[i], text: e.target.value };
-                                    updateBlockConfig(block.id, { items: updated });
-                                  }}
-                                  className="flex-1 bg-transparent border-none outline-none text-sm"
-                                />
-                                {item.reversed && (
-                                  <span className="shrink-0 px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider bg-amber-500/15 text-amber-400 border border-amber-500/20">
-                                    Rev
+                            {(block.config.items || []).map(
+                              (
+                                item: { id: string; text: string; reversed: boolean },
+                                i: number,
+                              ) => (
+                                <div
+                                  key={item.id}
+                                  className={`flex flex-wrap items-start gap-2 p-2.5 rounded-lg border text-xs ${
+                                    item.reversed
+                                      ? "border-amber-500/15 bg-amber-500/5"
+                                      : "border-white/10 bg-black/20"
+                                  }`}
+                                >
+                                  <span className="shrink-0 w-5 h-5 rounded-full bg-white/10 flex items-center justify-center text-[10px] font-bold text-white/50 mt-0.5">
+                                    {i + 1}
                                   </span>
-                                )}
-                              </div>
-                            ))}
+                                  <input
+                                    value={item.text}
+                                    onChange={(e) => {
+                                      const updated = [...(block.config.items || [])];
+                                      updated[i] = { ...updated[i], text: e.target.value };
+                                      updateBlockConfig(block.id, { items: updated });
+                                    }}
+                                    className="flex-1 min-w-[140px] bg-transparent border-none outline-none text-sm"
+                                  />
+                                  <label className="flex items-center gap-1.5 text-[10px] text-white/50 shrink-0 cursor-pointer select-none">
+                                    <input
+                                      type="checkbox"
+                                      checked={!!item.reversed}
+                                      onChange={(e) => {
+                                        const updated = [...(block.config.items || [])];
+                                        updated[i] = { ...updated[i], reversed: e.target.checked };
+                                        updateBlockConfig(block.id, { items: updated });
+                                      }}
+                                      className="rounded border-white/20 bg-transparent"
+                                    />
+                                    Reverse
+                                  </label>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      const updated = [...(block.config.items || [])];
+                                      updated.splice(i, 1);
+                                      updateBlockConfig(block.id, { items: updated });
+                                    }}
+                                    className="shrink-0 p-1 text-white/40 hover:text-rose-400"
+                                    title="Remove item"
+                                  >
+                                    <Trash className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
+                              ),
+                            )}
                           </div>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const updated = [
+                                ...(block.config.items || []),
+                                { id: crypto.randomUUID(), text: "New item", reversed: false },
+                              ];
+                              updateBlockConfig(block.id, { items: updated });
+                            }}
+                            className="mt-2 w-full flex items-center justify-center gap-2 py-2 rounded-lg border border-dashed border-white/20 text-xs text-white/60 hover:text-white/90 hover:border-white/40 transition-all"
+                          >
+                            <Plus className="w-3.5 h-3.5" />
+                            Add item
+                          </button>
                         </div>
                         <div>
                           <label className="block text-xs text-white/60 mb-1">Scale Labels (comma separated)</label>
-                          <input 
+                          <input
                             value={(block.config.scaleLabels || []).join(", ")}
-                            onChange={(e) => updateBlockConfig(block.id, { scaleLabels: e.target.value.split(",").map((s: string) => s.trim()) })}
+                            onChange={(e) =>
+                              updateBlockConfig(block.id, {
+                                scaleLabels: e.target.value.split(",").map((s: string) => s.trim()),
+                              })
+                            }
                             className="w-full rounded-md border border-white/10 bg-transparent px-2 py-1.5"
                             placeholder="Strongly Disagree, Disagree, Neutral, Agree, Strongly Agree"
                           />

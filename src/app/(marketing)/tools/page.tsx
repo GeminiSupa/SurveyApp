@@ -54,6 +54,14 @@ const TOOL_CARDS = [
     time: "1 min",
     category: "wellbeing" as ToolCategory,
   },
+  {
+    title: "PERMA Profile",
+    desc: "15 items across the 5 pillars of well-being.",
+    href: "/tools/perma",
+    img: "https://images.unsplash.com/photo-1499728603263-13726abce5fd?w=1200&auto=format&fit=crop&q=60",
+    time: "4 min",
+    category: "wellbeing" as ToolCategory,
+  },
 ];
 
 export default function ToolsDirectoryPage() {

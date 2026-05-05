@@ -27,6 +27,9 @@ function defaultOptionsFor(q: QuizQuestion): Array<{ value: number; label: strin
       { value: 3, label: "3" },
     ];
   }
+  if (q.kind === "likert11") {
+    return Array.from({ length: 11 }).map((_, i) => ({ value: i, label: String(i) }));
+  }
   return [
     { value: 1, label: "1" },
     { value: 2, label: "2" },
@@ -207,20 +210,24 @@ export function QuizRunner({
         </div>
         <h2 className="mt-6 whitespace-pre-wrap text-xl font-semibold leading-snug sm:text-2xl">{q.prompt}</h2>
 
-        <div className="mt-6 grid gap-3">
+        <div className={`mt-6 ${q.kind === "likert11" ? "flex flex-wrap justify-center gap-2" : "grid gap-3"}`}>
           {options.map((opt) => (
             <button
               key={opt.value}
               type="button"
               data-selected={current === opt.value}
-              className="option-btn flex items-center justify-between rounded-2xl px-5 py-4 text-left text-base font-medium"
+              className={`option-btn flex items-center justify-between rounded-2xl px-5 py-4 text-left text-base font-medium ${
+                q.kind === "likert11" ? "w-12 h-12 p-0 flex items-center justify-center text-lg" : ""
+              }`}
               onClick={() => {
                 setNote("");
                 setAnswers((prev) => ({ ...prev, [q.id]: opt.value }));
               }}
             >
-              <span className="flex-1 break-words pr-4">{opt.label}</span>
-              <span className="text-[10px] font-mono text-white/30">{current === opt.value ? "SELECTED" : ""}</span>
+              <span className={q.kind === "likert11" ? "" : "flex-1 break-words pr-4"}>{opt.label}</span>
+              {q.kind !== "likert11" && (
+                <span className="text-[10px] font-mono text-white/30">{current === opt.value ? "SELECTED" : ""}</span>
+              )}
             </button>
           ))}
         </div>

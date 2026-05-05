@@ -22,12 +22,17 @@ export type Likert4Question = QuizQuestionBase & {
   index: number;
 };
 
+export type Likert11Question = QuizQuestionBase & {
+  kind: "likert11";
+  index: number;
+};
+
 export type BinaryQuestion = QuizQuestionBase & {
   kind: "binary";
   index: number;
 };
 
-export type QuizQuestion = Likert5Question | Likert4Question | BinaryQuestion;
+export type QuizQuestion = Likert5Question | Likert4Question | Likert11Question | BinaryQuestion;
 
 export type QuizDefinition = {
   id: string;

@@ -101,6 +101,15 @@ export function StudyRunner({
 
   const currentBlock = useMemo(() => randomizedBlocks[idx], [randomizedBlocks, idx]);
   const progress = blocks.length ? Math.round(((idx + 1) / blocks.length) * 100) : 0;
+  const brsDefaultLabels = ["Strongly Disagree", "Disagree", "Neutral", "Agree", "Strongly Agree"];
+  const brsScaleLabelsForUi =
+    currentBlock?.block_type === "brs"
+      ? Array.isArray(currentBlock.config?.scaleLabels) && currentBlock.config.scaleLabels.length > 0
+        ? (currentBlock.config.scaleLabels as string[])
+        : brsDefaultLabels
+      : brsDefaultLabels;
+  const brsPointCount =
+    currentBlock?.block_type === "brs" ? Math.max(2, brsScaleLabelsForUi.length) : 5;
   const currentStimuli = Array.isArray(currentBlock?.config?.stimuli) ? currentBlock.config.stimuli : [];
   const iatTrials = useMemo(() => {
     if (currentBlock?.block_type !== "iat")
@@ -279,17 +288,32 @@ export function StudyRunner({
       qs.forEach((q: any) => {
         const val = answers[q.id];
         if (val === undefined) return;
-        
+
         let rType: "likert" | "text" | "mcq" = "likert";
-        if (currentBlock.block_type === "multiple_choice" || q.surveyType === "mcq") rType = "mcq";
         if (q.surveyType === "open_text") rType = "text";
-        
+        else if (q.surveyType === "mcq") rType = "mcq";
+        else if (q.surveyType === "likert") rType = "likert";
+        else if (currentBlock.block_type === "multiple_choice") rType = "mcq";
+
         const qk = String(currentBlock.config?.questionKey ?? `${rType}_${q.id}`);
+        if (rType === "likert") {
+          const max = Number(q.scaleSize || 5);
+          const raw = Number(val);
+          const scored = q.reversed ? max + 1 - raw : raw;
+          responseAdditions.push({
+            questionKey: qk,
+            responseType: "likert",
+            numericValue: scored,
+            jsonValue: { raw, reversed: !!q.reversed, scaleMax: max },
+          });
+          responseMapAdditions[qk] = scored;
+          return;
+        }
         responseAdditions.push({
-          questionKey: qk, 
-          responseType: rType, 
-          textValue: rType !== "likert" ? String(val) : undefined,
-          numericValue: rType === "likert" ? Number(val) : undefined 
+          questionKey: qk,
+          responseType: rType,
+          textValue: String(val),
+          numericValue: undefined,
         });
         responseMapAdditions[qk] = val;
       });
@@ -317,24 +341,23 @@ export function StudyRunner({
       });
     }
     if (currentBlock.block_type === "brs") {
-      const items: Array<{ id: string; text: string; reversed: boolean }> = Array.isArray(currentBlock.config?.items) ? currentBlock.config.items : [];
-      const scoredItems: Record<string, number> = {};
-      let total = 0;
+      const items: Array<{ id: string; text: string; reversed: boolean }> = Array.isArray(currentBlock.config?.items)
+        ? currentBlock.config.items
+        : [];
+      const brsLbl = Array.isArray(currentBlock.config?.scaleLabels) ? currentBlock.config.scaleLabels : null;
+      const scalePoints = Math.max(2, brsLbl && brsLbl.length > 0 ? brsLbl.length : 5);
       items.forEach((item) => {
         const raw = brsRatings[item.id] || 0;
-        const scored = item.reversed ? (6 - raw) : raw;
-        scoredItems[item.id] = scored;
-        total += scored;
+        const scored = item.reversed ? scalePoints + 1 - raw : raw;
+        const qk = `brs_${currentBlock.id}_${item.id}`;
+        responseAdditions.push({
+          questionKey: qk,
+          responseType: "likert",
+          numericValue: scored,
+          jsonValue: { raw, reversed: !!item.reversed, scaleMax: scalePoints, itemText: item.text },
+        });
+        responseMapAdditions[qk] = scored;
       });
-      const meanScore = items.length > 0 ? total / items.length : 0;
-      const qk = `brs_${currentBlock.id}`;
-      responseAdditions.push({
-        questionKey: qk,
-        responseType: "likert",
-        numericValue: parseFloat(meanScore.toFixed(2)),
-        jsonValue: { rawRatings: brsRatings, scoredItems, meanScore: parseFloat(meanScore.toFixed(2)), itemCount: items.length },
-      });
-      responseMapAdditions[qk] = meanScore;
     }
     if (responseAdditions.length) {
       setResponses((prev) => [...prev, ...responseAdditions]);
@@ -589,6 +612,11 @@ export function StudyRunner({
 
         {currentBlock.block_type === "multiple_choice" || currentBlock.block_type === "survey" ? (
           <div className="mt-4 space-y-8">
+            {currentBlock.block_type === "survey" && currentBlock.config?.instruction ? (
+              <div className="rounded-xl border border-white/10 bg-white/[0.03] p-4 text-sm text-white/75 leading-relaxed whitespace-pre-wrap">
+                {String(currentBlock.config.instruction)}
+              </div>
+            ) : null}
             {(Array.isArray(currentBlock.config?.questions) 
               ? currentBlock.config.questions 
               : [{ 
@@ -598,11 +626,19 @@ export function StudyRunner({
                   options: currentBlock.config?.options,
                   scaleSize: currentBlock.config?.scaleSize
                 }]
-            ).map((q: any, i: number) => {
-              const isMcq = currentBlock.block_type === "multiple_choice" || q.surveyType === "mcq";
+            ).map((q: any) => {
               const isText = q.surveyType === "open_text";
-              const isLikert = currentBlock.block_type === "survey" && (!q.surveyType || q.surveyType === "likert");
+              const isMcq =
+                q.surveyType === "mcq" ||
+                (currentBlock.block_type === "multiple_choice" && q.surveyType !== "likert" && !isText);
+              const isLikert =
+                q.surveyType === "likert" ||
+                (currentBlock.block_type === "survey" && !q.surveyType && !isText);
               const currentAnswer = answers[q.id];
+              const likertSize = Number(q.scaleSize || 5);
+              const blockScaleLabels = Array.isArray(currentBlock.config?.scaleLabels)
+                ? (currentBlock.config.scaleLabels as string[])
+                : [];
 
               return (
                 <div key={q.id} className="space-y-3">
@@ -629,8 +665,17 @@ export function StudyRunner({
 
                   {isLikert && (
                     <div className="flex flex-col gap-4">
+                      {blockScaleLabels.length === likertSize && likertSize > 0 ? (
+                        <div className="hidden sm:grid gap-2 mb-1" style={{ gridTemplateColumns: `repeat(${likertSize}, minmax(0, 1fr))` }}>
+                          {blockScaleLabels.map((label: string, li: number) => (
+                            <p key={li} className="text-[9px] text-center text-white/40 leading-tight font-medium uppercase tracking-wider">
+                              {label}
+                            </p>
+                          ))}
+                        </div>
+                      ) : null}
                       <div className="flex flex-wrap gap-2 sm:gap-3 justify-center">
-                        {Array.from({ length: Number(q.scaleSize || 5) }).map((_, idx) => {
+                        {Array.from({ length: likertSize }).map((_, idx) => {
                           const val = idx + 1;
                           return (
                             <button
@@ -646,8 +691,8 @@ export function StudyRunner({
                         })}
                       </div>
                       <div className="flex justify-between px-2 text-[10px] uppercase tracking-widest text-white/30 font-bold">
-                        <span>Low Intensity</span>
-                        <span>High Intensity</span>
+                        <span>{blockScaleLabels[0] ?? "Low"}</span>
+                        <span>{blockScaleLabels[blockScaleLabels.length - 1] ?? "High"}</span>
                       </div>
                     </div>
                   )}
@@ -702,13 +747,18 @@ export function StudyRunner({
             </div>
 
             {/* Scale header */}
-            <div className="hidden sm:grid sm:grid-cols-[1fr_repeat(5,48px)] gap-1 mb-2 px-2">
+            <div
+              className="hidden sm:grid gap-1 mb-2 px-2"
+              style={{
+                gridTemplateColumns: `1fr repeat(${brsPointCount}, minmax(0, 48px))`,
+              }}
+            >
               <div />
-              {(Array.isArray(currentBlock.config?.scaleLabels)
-                ? currentBlock.config.scaleLabels
-                : ["Strongly Disagree", "Disagree", "Neutral", "Agree", "Strongly Agree"]
-              ).map((label: string, i: number) => (
-                <p key={i} className="text-[9px] text-center text-white/40 leading-tight font-medium uppercase tracking-wider">
+              {brsScaleLabelsForUi.map((label: string, li: number) => (
+                <p
+                  key={li}
+                  className="text-[9px] text-center text-white/40 leading-tight font-medium uppercase tracking-wider"
+                >
                   {label}
                 </p>
               ))}
@@ -728,7 +778,12 @@ export function StudyRunner({
                           : "border-white/10 bg-white/[0.02] hover:bg-white/[0.04]"
                       }`}
                     >
-                      <div className="sm:grid sm:grid-cols-[1fr_repeat(5,48px)] sm:items-center gap-1">
+                      <div
+                        className="sm:grid sm:items-center gap-1"
+                        style={{
+                          gridTemplateColumns: `1fr repeat(${brsPointCount}, minmax(0, 48px))`,
+                        }}
+                      >
                         <p className="text-sm leading-relaxed mb-3 sm:mb-0">
                           <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-white/10 text-[10px] font-bold text-white/50 mr-2">
                             {i + 1}
@@ -737,14 +792,18 @@ export function StudyRunner({
                         </p>
 
                         {/* Mobile: horizontal labels */}
-                        <div className="flex sm:hidden items-center justify-between mb-2 px-1">
-                          <span className="text-[9px] text-white/30 uppercase tracking-wider">Strongly Disagree</span>
-                          <span className="text-[9px] text-white/30 uppercase tracking-wider">Strongly Agree</span>
+                        <div className="flex sm:hidden items-center justify-between mb-2 px-1 sm:col-span-full">
+                          <span className="text-[9px] text-white/30 uppercase tracking-wider">
+                            {brsScaleLabelsForUi[0] ?? "Low"}
+                          </span>
+                          <span className="text-[9px] text-white/30 uppercase tracking-wider">
+                            {brsScaleLabelsForUi[brsScaleLabelsForUi.length - 1] ?? "High"}
+                          </span>
                         </div>
 
                         {/* Rating buttons */}
                         <div className="flex sm:contents gap-1 justify-center">
-                          {[1, 2, 3, 4, 5].map((val) => (
+                          {Array.from({ length: brsPointCount }, (_, vi) => vi + 1).map((val) => (
                             <button
                               key={val}
                               type="button"
@@ -773,7 +832,7 @@ export function StudyRunner({
               if (answered.length === 0) return null;
               const total = answered.reduce((acc, item) => {
                 const raw = brsRatings[item.id] || 0;
-                return acc + (item.reversed ? 6 - raw : raw);
+                return acc + (item.reversed ? brsPointCount + 1 - raw : raw);
               }, 0);
               const mean = total / answered.length;
               const level = mean >= 4.3 ? "High" : mean >= 3.0 ? "Normal" : mean >= 1.5 ? "Low" : "Very Low";

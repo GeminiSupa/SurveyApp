@@ -36,6 +36,9 @@ export default function LandingPage() {
             <Link className="rounded-xl border border-white/20 px-4 py-2 text-sm" href="/tools/who5">
               WHO-5 wellbeing
             </Link>
+            <Link className="rounded-xl border border-white/20 px-4 py-2 text-sm" href="/tools/perma">
+              PERMA profile
+            </Link>
           </div>
           <div className="mt-5 flex flex-wrap gap-3">
             <Link className="rounded-xl border border-white/15 px-4 py-2 text-sm" href="/participant/demo">
@@ -85,6 +88,12 @@ export default function LandingPage() {
             desc: "Positive wellbeing snapshot.",
             href: "/tools/who5",
             img: "https://images.unsplash.com/photo-1441974231531-c6227db76b6e?w=1200&auto=format&fit=crop&q=60",
+          },
+          {
+            title: "PERMA",
+            desc: "P-E-R-M-A well-being snapshot.",
+            href: "/tools/perma",
+            img: "https://images.unsplash.com/photo-1499728603263-13726abce5fd?w=1200&auto=format&fit=crop&q=60",
           },
         ].map((card) => (
           <Link key={card.href} href={card.href} className="tool-card glass-panel group overflow-hidden rounded-3xl">
