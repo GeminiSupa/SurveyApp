@@ -39,8 +39,8 @@ export async function POST(request: Request) {
     await writeAuditLog({ route: "/api/participant/event", action: "session_validate", outcome: "blocked", ip });
     return NextResponse.json({ error: "Invalid participant session token." }, { status: 403 });
   }
-  if (session.status !== "in_progress" || session.study_id !== payload.studyId) {
-    return NextResponse.json({ error: "Session is not valid for event logging." }, { status: 409 });
+  if (session.study_id !== payload.studyId) {
+    return NextResponse.json({ error: "Session does not belong to this study." }, { status: 409 });
   }
 
   const { error } = await supabase.from("events").insert({

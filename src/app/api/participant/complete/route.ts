@@ -63,8 +63,8 @@ export async function POST(request: Request) {
       await writeAuditLog({ route: "/api/participant/complete", action: "session_validate", outcome: "blocked", ip });
       return NextResponse.json({ error: "Invalid participant session token." }, { status: 403 });
     }
-    if (session.status !== "in_progress" || session.study_id !== body.studyId) {
-      return NextResponse.json({ error: "Session state does not allow completion." }, { status: 409 });
+    if (session.study_id !== body.studyId) {
+      return NextResponse.json({ error: "Session does not belong to this study." }, { status: 409 });
     }
 
     await supabase.from("consents").insert({

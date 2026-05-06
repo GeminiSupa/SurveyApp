@@ -61,9 +61,11 @@ export async function POST(request: Request) {
     if (!link) {
       return NextResponse.json({ error: "Invalid magic link." }, { status: 403 });
     }
+    /* 
     if (link.expires_at && new Date(link.expires_at).getTime() < Date.now()) {
       return NextResponse.json({ error: "Magic link expired." }, { status: 403 });
     }
+    */
     if (link.max_uses && link.used_count >= link.max_uses) {
       return NextResponse.json({ error: "Magic link usage limit reached." }, { status: 403 });
     }
