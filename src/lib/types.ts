@@ -1,4 +1,4 @@
-export type StudyBlockType = "consent" | "survey" | "multiple_choice" | "ux_task" | "iat" | "reaction_time" | "brs" | "thank_you";
+export type StudyBlockType = "consent" | "survey" | "multiple_choice" | "ux_task" | "iat" | "reaction_time" | "brs" | "thank_you" | "attention_check";
 
 export type StudyBlock = {
   id: string;

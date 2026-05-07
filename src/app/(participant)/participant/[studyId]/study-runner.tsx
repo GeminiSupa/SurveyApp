@@ -64,6 +64,8 @@ export function StudyRunner({
   const [offline, setOffline] = useState(false);
   const [responseMap, setResponseMap] = useState<Record<string, unknown>>({});
   const [isScreenedOut, setIsScreenedOut] = useState(false);
+  const [attentionCheckPassed, setAttentionCheckPassed] = useState(false);
+  const [completionCode, setCompletionCode] = useState<string | null>(null);
   const [brsRatings, setBrsRatings] = useState<Record<string, number>>({});
   const hasConsentBlock = useMemo(
     () => blocks.some((block) => block.block_type === "consent"),
@@ -96,7 +98,26 @@ export function StudyRunner({
       shuffleBlocksDeterministic(bs, `${participantToken}:${g}`),
     );
 
-    return [...ungroupped, ...shuffledGroups];
+    const result = [...ungroupped, ...shuffledGroups];
+    
+    // Inject Attention Check Question
+    const attentionBlock: StudyBlock = {
+      id: "attention-check-block",
+      block_type: "attention_check",
+      label: "Attention Check",
+      sort_order: 9999,
+      config: {
+        question: "To ensure you are reading the questions carefully, please select 'Option 5' from the list below.",
+        options: ["Option 1", "Option 2", "Option 3", "Option 4", "Option 5"],
+        correctOption: "Option 5"
+      }
+    };
+
+    // Insert before the last block (which is usually thank you/completion)
+    const insertPos = Math.max(0, result.length - 1);
+    result.splice(insertPos, 0, attentionBlock);
+
+    return result;
   }, [blocks, participantToken]);
 
   const currentBlock = useMemo(() => randomizedBlocks[idx], [randomizedBlocks, idx]);
@@ -379,6 +400,7 @@ export function StudyRunner({
         sessionId,
         participantToken,
         consentAccepted: hasConsentBlock ? consent : true,
+        attentionCheckPassed,
         responses: allResponses,
         trials,
         durationMs: Date.now() - sessionStartedAt,
@@ -390,6 +412,8 @@ export function StudyRunner({
       setMessage(data.error ?? "Submission failed.");
       return false;
     }
+    const data = await response.json() as { completionCode?: string };
+    setCompletionCode(data.completionCode || null);
     setStatus("saved");
     setMessage(completionMessage);
     return true;
@@ -407,6 +431,18 @@ export function StudyRunner({
       setStatus("error");
       setMessage("Complete the IAT trials using the left/right buttons.");
       return;
+    }
+
+    if (currentBlock.block_type === "attention_check") {
+      const answer = answers[currentBlock.id];
+      if (!answer) {
+        setStatus("error");
+        setMessage("Please select an option to continue.");
+        return;
+      }
+      if (answer === currentBlock.config?.correctOption) {
+        setAttentionCheckPassed(true);
+      }
     }
 
     if ((currentBlock.block_type === "survey" || currentBlock.block_type === "multiple_choice") && currentBlock.config?.required !== false) {
@@ -567,6 +603,19 @@ export function StudyRunner({
               {String(currentBlock?.config?.message || message || "Your responses have been successfully recorded.")}
             </p>
           </div>
+          
+          {completionCode && (
+            <div className="bg-white/5 border border-white/10 rounded-2xl p-6 space-y-3 max-w-xs mx-auto animate-in fade-in zoom-in duration-500">
+              <p className="text-[10px] uppercase tracking-[0.2em] text-white/40 font-bold">Your Completion Code</p>
+              <div className="text-4xl font-mono font-black tracking-[0.2em] text-[var(--brand)]">
+                {completionCode}
+              </div>
+              <p className="text-[10px] text-white/30 leading-relaxed">
+                Please copy this code and provide it to the researcher.
+              </p>
+            </div>
+          )}
+
           <div className="pt-12">
             <p className="text-xs uppercase tracking-[0.3em] text-white/20 font-bold">You may now close this window</p>
           </div>
@@ -731,6 +780,34 @@ export function StudyRunner({
               </div>
             )}
             {/* Interaction captured indicator could go here if needed */}
+          </div>
+        ) : null}
+
+        {currentBlock.block_type === "attention_check" ? (
+          <div className="mt-4 space-y-6">
+            <div className="rounded-xl border border-blue-500/20 bg-blue-500/5 p-4 text-sm text-blue-200 flex items-center gap-3">
+              <Info className="w-5 h-5 text-blue-400" />
+              <span>Please read the instruction below carefully.</span>
+            </div>
+            <div className="space-y-4">
+              <p className="text-lg font-medium text-white/90">{String(currentBlock.config?.question)}</p>
+              <div className="grid gap-3">
+                {(currentBlock.config?.options as string[] || []).map((opt) => (
+                  <button
+                    type="button"
+                    key={opt}
+                    data-selected={answers[currentBlock.id] === opt}
+                    onClick={() => setAnswers(prev => ({ ...prev, [currentBlock.id]: opt }))}
+                    className="option-btn rounded-2xl px-5 py-4 text-left text-base font-medium flex items-center justify-between group"
+                  >
+                    <span className="flex-1">{opt}</span>
+                    <div className={`w-5 h-5 rounded-full border-2 transition-all flex items-center justify-center ${answers[currentBlock.id] === opt ? "border-[var(--brand)] bg-[var(--brand)]" : "border-white/20"}`}>
+                      {answers[currentBlock.id] === opt && <Check className="w-3 h-3 text-black font-bold" />}
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
           </div>
         ) : null}
 

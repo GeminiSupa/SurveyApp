@@ -33,6 +33,7 @@ export async function POST(request: Request) {
     sessionId?: string;
     participantToken?: string;
     consentAccepted?: boolean;
+    attentionCheckPassed?: boolean;
     responses?: ResponsePayload[];
     trials?: Array<{
       trialType: "iat" | "reaction_time";
@@ -111,12 +112,19 @@ export async function POST(request: Request) {
       payload: { durationMs: body.durationMs ?? 0 },
     });
 
+    const completionCode = Math.floor(100000 + Math.random() * 900000).toString();
+
     await supabase
       .from("participant_sessions")
-      .update({ status: "completed", completed_at: new Date().toISOString() })
+      .update({ 
+        status: "completed", 
+        completed_at: new Date().toISOString(),
+        completion_code: completionCode,
+        attention_check_passed: body.attentionCheckPassed ?? false
+      })
       .eq("id", body.sessionId);
 
     await writeAuditLog({ route: "/api/participant/complete", action: "session_complete", outcome: "success", ip });
-    return NextResponse.json({ ok: true });
+    return NextResponse.json({ ok: true, completionCode });
   });
 }
