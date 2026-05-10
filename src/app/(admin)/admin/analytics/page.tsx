@@ -57,15 +57,15 @@ async function getAnalytics(studyId?: string) {
       .select("payload")
       .eq("event_type", "session_duration")
       .eq("study_id", selectedStudyId)
-      .limit(200),
+      .limit(10000),
     client
       .from("psych_trials")
       .select("reaction_time_ms,trial_type,is_correct,payload,participant_session_id")
       .eq("study_id", selectedStudyId)
-      .limit(1200),
-    client.from("events").select("payload").eq("event_type", "first_click").eq("study_id", selectedStudyId).limit(600),
-    client.from("responses").select("numeric_value,text_value,question_key,response_type").eq("study_id", selectedStudyId).limit(2000),
-    client.from("participant_sessions").select("*").eq("study_id", selectedStudyId).order("started_at", { ascending: false }).limit(50),
+      .limit(50000),
+    client.from("events").select("payload").eq("event_type", "first_click").eq("study_id", selectedStudyId).limit(20000),
+    client.from("responses").select("numeric_value,text_value,question_key,response_type").eq("study_id", selectedStudyId).limit(100000),
+    client.from("participant_sessions").select("*").eq("study_id", selectedStudyId).order("started_at", { ascending: false }).limit(1000),
     client.from("study_blocks").select("id,block_type,config,label").eq("study_id", selectedStudyId).order("sort_order", { ascending: true }),
     client
       .from("participant_sessions")
