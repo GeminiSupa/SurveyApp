@@ -420,6 +420,22 @@ export function StudyRunner({
     return true;
   }
 
+  async function syncResponses(currentResponses: ResponseItem[]) {
+    if (!sessionId || !participantToken || !currentResponses.length) return;
+    
+    // Fire and forget sync to avoid blocking the UI
+    void fetch("/api/participant/sync", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        studyId: studyDbId,
+        sessionId,
+        participantToken,
+        responses: currentResponses
+      })
+    }).catch(err => console.error("Sync failed:", err));
+  }
+
   async function handleNext() {
     if (!currentBlock) return;
     if (currentBlock.block_type === "consent" && !consent) {
@@ -479,6 +495,7 @@ export function StudyRunner({
     const nextResponses = [...responses, ...(collected?.responseAdditions ?? [])];
     const dq = isDisqualified(disqualificationRules ?? [], nextResponseMap);
     if (dq.disqualified) {
+      await syncResponses(collected?.responseAdditions ?? []);
       const completed = await submitCompletion(nextResponses, dq.message || "You do not meet this study's eligibility requirements.", true);
       if (completed) setIsScreenedOut(true);
       return;
@@ -491,6 +508,7 @@ export function StudyRunner({
       responses: nextResponseMap,
     });
     if (nextDecision.terminate) {
+      await syncResponses(collected?.responseAdditions ?? []);
       await submitCompletion(nextResponses, "Thank you. This session has ended.");
       return;
     }
@@ -498,7 +516,10 @@ export function StudyRunner({
     if (nextDecision.nextBlockId) {
       const nextIdx = randomizedBlocks.findIndex((b) => b.id === nextDecision.nextBlockId);
       if (nextIdx >= 0) {
+        await syncResponses(collected?.responseAdditions ?? []);
         setIdx(nextIdx);
+        setResponses(nextResponses);
+        setResponseMap(nextResponseMap);
         setAnswers({});
         setBrsRatings({});
         setMessage("");
@@ -507,7 +528,10 @@ export function StudyRunner({
     }
 
     if (idx < randomizedBlocks.length - 1) {
+      await syncResponses(collected?.responseAdditions ?? []);
       setIdx((value) => value + 1);
+      setResponses(nextResponses);
+      setResponseMap(nextResponseMap);
       setAnswers({});
       setBrsRatings({});
       setMessage("");
