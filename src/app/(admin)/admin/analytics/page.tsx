@@ -28,6 +28,7 @@ async function getAnalytics(studyId?: string) {
       blocks: [],
       responses: [],
       completedCount: 0,
+      completedWithDataCount: 0,
       totalSessionsCount: 0,
       completedSessionsForAudit: 0,
       integrityFlags: [],
@@ -102,6 +103,9 @@ async function getAnalytics(studyId?: string) {
     responseCountsBySession.set(sid, (responseCountsBySession.get(sid) ?? 0) + 1);
   }
   const completedSessions = completedSessionsResult.data ?? [];
+  const completedWithDataCount = completedSessions.filter(
+    (s) => (responseCountsBySession.get(s.id) ?? 0) > 0,
+  ).length;
   const integrityFlags = completedSessions
     .map((s) => ({
       participantSessionId: s.id,
@@ -125,6 +129,7 @@ async function getAnalytics(studyId?: string) {
     blocks: blocksResult.data ?? [],
     thresholdHistory: thresholdHistory ?? [],
     completedCount: completedCountResult.count ?? 0,
+    completedWithDataCount,
     totalSessionsCount: totalSessionsCountResult.count ?? 0,
     completedSessionsForAudit: completedSessions.length,
     integrityFlags,
@@ -202,9 +207,12 @@ export default async function AnalyticsPage({
       />
       <div className="grid gap-4 sm:grid-cols-4">
         <article className="rounded-xl border border-white/15 bg-white/5 p-4">
-          <p className="text-xs uppercase tracking-[0.15em] text-[var(--muted)]">Total Completions</p>
+          <p className="text-xs uppercase tracking-[0.15em] text-[var(--muted)]">Completions With Data</p>
           <p className="mt-2 text-2xl font-semibold text-emerald-400">
-            {data.completedCount}
+            {data.completedWithDataCount}
+          </p>
+          <p className="mt-1 text-[10px] text-white/40">
+            Status says completed: {data.completedCount}
           </p>
         </article>
         <article className="rounded-xl border border-white/15 bg-white/5 p-4">
