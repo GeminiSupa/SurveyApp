@@ -20,7 +20,19 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "Supabase not configured" }, { status: 500 });
   }
 
-  // Fetch responses and session details
+  // Fetch all participant sessions so exports include sessions even when
+  // response rows are missing or partially written.
+  const { data: sessions, error: sessionError } = await supabase
+    .from("participant_sessions")
+    .select("id, started_at, completed_at, status, device, locale")
+    .eq("study_id", studyId)
+    .order("started_at", { ascending: true });
+
+  if (sessionError) {
+    return NextResponse.json({ error: sessionError.message }, { status: 500 });
+  }
+
+  // Fetch responses and merge into the session rows.
   const { data: responses, error: responseError } = await supabase
     .from("responses")
     .select(`
@@ -49,10 +61,21 @@ export async function GET(request: Request) {
   // Pivot data into Wide Format (One row per session)
   const sessionsMap: Record<string, any> = {};
 
-  responses.forEach(r => {
+  (sessions ?? []).forEach((s) => {
+    sessionsMap[s.id] = {
+      ParticipantID: s.id,
+      StartedAt: s.started_at,
+      CompletedAt: s.completed_at,
+      Status: s.status,
+      Device: s.device || "unknown",
+      Locale: s.locale || "unknown",
+    };
+  });
+
+  (responses ?? []).forEach((r) => {
     const sid = r.participant_session_id;
     if (!sessionsMap[sid]) {
-      // Handle Supabase join (might be object or array depending on version/config)
+      // Fallback for orphaned response rows.
       const s = Array.isArray(r.participant_sessions) ? r.participant_sessions[0] : r.participant_sessions;
       
       sessionsMap[sid] = {

@@ -68,15 +68,18 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Session does not belong to this study." }, { status: 409 });
     }
 
-    await supabase.from("consents").insert({
+    const { error: consentError } = await supabase.from("consents").insert({
       study_id: body.studyId,
       participant_session_id: body.sessionId,
       consent_text_version: "v1",
       accepted: body.consentAccepted ?? false,
     });
+    if (consentError) {
+      return NextResponse.json({ error: `Failed to store consent: ${consentError.message}` }, { status: 500 });
+    }
 
     if (body.responses.length) {
-      await supabase.from("responses").insert(
+      const { error: responseInsertError } = await supabase.from("responses").insert(
         body.responses.map((item) => ({
           study_id: body.studyId,
           participant_session_id: body.sessionId,
@@ -87,10 +90,13 @@ export async function POST(request: Request) {
           json_value: item.jsonValue,
         })),
       );
+      if (responseInsertError) {
+        return NextResponse.json({ error: `Failed to store responses: ${responseInsertError.message}` }, { status: 500 });
+      }
     }
 
     if (Array.isArray(body.trials) && body.trials.length) {
-      await supabase.from("psych_trials").insert(
+      const { error: trialInsertError } = await supabase.from("psych_trials").insert(
         body.trials.map((trial) => ({
           study_id: body.studyId,
           participant_session_id: body.sessionId,
@@ -103,18 +109,24 @@ export async function POST(request: Request) {
           payload: trial.payload ?? {},
         })),
       );
+      if (trialInsertError) {
+        return NextResponse.json({ error: `Failed to store trial data: ${trialInsertError.message}` }, { status: 500 });
+      }
     }
 
-    await supabase.from("events").insert({
+    const { error: eventInsertError } = await supabase.from("events").insert({
       study_id: body.studyId,
       participant_session_id: body.sessionId,
       event_type: "session_duration",
       payload: { durationMs: body.durationMs ?? 0 },
     });
+    if (eventInsertError) {
+      return NextResponse.json({ error: `Failed to store session duration: ${eventInsertError.message}` }, { status: 500 });
+    }
 
     const completionCode = Math.floor(100000 + Math.random() * 900000).toString();
 
-    await supabase
+    const { error: completeUpdateError } = await supabase
       .from("participant_sessions")
       .update({ 
         status: "completed", 
@@ -123,6 +135,9 @@ export async function POST(request: Request) {
         attention_check_passed: body.attentionCheckPassed ?? false
       })
       .eq("id", body.sessionId);
+    if (completeUpdateError) {
+      return NextResponse.json({ error: `Failed to finalize completion: ${completeUpdateError.message}` }, { status: 500 });
+    }
 
     await writeAuditLog({ route: "/api/participant/complete", action: "session_complete", outcome: "success", ip });
     return NextResponse.json({ ok: true, completionCode });

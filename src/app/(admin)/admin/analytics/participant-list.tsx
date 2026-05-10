@@ -3,7 +3,17 @@
 import React, { useState, useEffect } from "react";
 import { User, Calendar, Clock, ChevronRight, FileText, CheckCircle, XCircle } from "lucide-react";
 
-export function ParticipantList({ sessions, studyId, blocks }: { sessions: any[]; studyId: string; blocks: any[] }) {
+export function ParticipantList({
+  sessions,
+  studyId,
+  blocks,
+  totalSessionsCount,
+}: {
+  sessions: any[];
+  studyId: string;
+  blocks: any[];
+  totalSessionsCount?: number;
+}) {
   const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null);
   const [responses, setResponses] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -96,7 +106,9 @@ export function ParticipantList({ sessions, studyId, blocks }: { sessions: any[]
           <User className="w-4 h-4 text-[var(--brand)]" />
           Recent Participants
         </h2>
-        <span className="text-[10px] uppercase tracking-widest text-white/30">Last 50 sessions</span>
+        <span className="text-[10px] uppercase tracking-widest text-white/30">
+          Showing latest {sessions.length} / {totalSessionsCount ?? sessions.length} sessions
+        </span>
       </div>
       
       <div className="overflow-x-auto">

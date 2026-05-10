@@ -16,7 +16,22 @@ import { VisualSummary } from "@/app/(admin)/admin/analytics/visual-summary";
 async function getAnalytics(studyId?: string) {
   const client = createAdminSupabaseClient();
   if (!client) {
-    return { durations: [], reactions: [], heatmap: [], likerts: [], sessions: [], studies: [], selectedStudyId: "", thresholds: readIatThresholds(), blocks: [], responses: [] };
+    return {
+      durations: [],
+      reactions: [],
+      heatmap: [],
+      likerts: [],
+      sessions: [],
+      studies: [],
+      selectedStudyId: "",
+      thresholds: readIatThresholds(),
+      blocks: [],
+      responses: [],
+      completedCount: 0,
+      totalSessionsCount: 0,
+      completedSessionsForAudit: 0,
+      integrityFlags: [],
+    };
   }
 
   const { data: studies } = await client.from("studies").select("id,title,status,config").order("created_at", { ascending: false }).limit(30);
@@ -24,7 +39,18 @@ async function getAnalytics(studyId?: string) {
   const selectedStudy = (studies ?? []).find((s) => s.id === selectedStudyId);
   const thresholds = readIatThresholds((selectedStudy?.config ?? {}) as Record<string, unknown>);
 
-  const [eventResult, reactionResult, heatmapResult, responseResult, sessionResult, blocksResult] = await Promise.all([
+  const [
+    eventResult,
+    reactionResult,
+    heatmapResult,
+    responseResult,
+    sessionResult,
+    blocksResult,
+    completedCountResult,
+    totalSessionsCountResult,
+    completedSessionsResult,
+    responseKeysResult,
+  ] = await Promise.all([
     client
       .from("events")
       .select("payload")
@@ -40,6 +66,25 @@ async function getAnalytics(studyId?: string) {
     client.from("responses").select("numeric_value,text_value,question_key,response_type").eq("study_id", selectedStudyId).limit(2000),
     client.from("participant_sessions").select("*").eq("study_id", selectedStudyId).order("started_at", { ascending: false }).limit(50),
     client.from("study_blocks").select("id,block_type,config,label").eq("study_id", selectedStudyId).order("sort_order", { ascending: true }),
+    client
+      .from("participant_sessions")
+      .select("id", { count: "exact", head: true })
+      .eq("study_id", selectedStudyId)
+      .eq("status", "completed"),
+    client
+      .from("participant_sessions")
+      .select("id", { count: "exact", head: true })
+      .eq("study_id", selectedStudyId),
+    client
+      .from("participant_sessions")
+      .select("id, started_at, completed_at")
+      .eq("study_id", selectedStudyId)
+      .eq("status", "completed")
+      .order("completed_at", { ascending: false }),
+    client
+      .from("responses")
+      .select("participant_session_id")
+      .eq("study_id", selectedStudyId),
   ]);
   const { data: thresholdHistory } = selectedStudyId
     ? await client
@@ -49,6 +94,22 @@ async function getAnalytics(studyId?: string) {
         .order("changed_at", { ascending: false })
         .limit(20)
     : { data: [] };
+
+  const responseCountsBySession = new Map<string, number>();
+  for (const row of responseKeysResult.data ?? []) {
+    const sid = row.participant_session_id;
+    if (!sid) continue;
+    responseCountsBySession.set(sid, (responseCountsBySession.get(sid) ?? 0) + 1);
+  }
+  const completedSessions = completedSessionsResult.data ?? [];
+  const integrityFlags = completedSessions
+    .map((s) => ({
+      participantSessionId: s.id,
+      startedAt: s.started_at,
+      completedAt: s.completed_at,
+      responseCount: responseCountsBySession.get(s.id) ?? 0,
+    }))
+    .filter((row) => row.responseCount === 0 || row.responseCount <= 2);
 
   return {
     durations: (eventResult.data ?? []).map((item) => Number(item.payload?.durationMs ?? 0)),
@@ -63,6 +124,10 @@ async function getAnalytics(studyId?: string) {
     responses: responseResult.data ?? [],
     blocks: blocksResult.data ?? [],
     thresholdHistory: thresholdHistory ?? [],
+    completedCount: completedCountResult.count ?? 0,
+    totalSessionsCount: totalSessionsCountResult.count ?? 0,
+    completedSessionsForAudit: completedSessions.length,
+    integrityFlags,
   };
 }
 
@@ -129,12 +194,17 @@ export default async function AnalyticsPage({
       
       <VisualSummary responses={data.responses} blocks={data.blocks} />
       
-      <ParticipantList sessions={data.sessions} studyId={data.selectedStudyId} blocks={data.blocks} />
+      <ParticipantList
+        sessions={data.sessions}
+        studyId={data.selectedStudyId}
+        blocks={data.blocks}
+        totalSessionsCount={data.totalSessionsCount}
+      />
       <div className="grid gap-4 sm:grid-cols-4">
         <article className="rounded-xl border border-white/15 bg-white/5 p-4">
           <p className="text-xs uppercase tracking-[0.15em] text-[var(--muted)]">Total Completions</p>
           <p className="mt-2 text-2xl font-semibold text-emerald-400">
-            {data.sessions.filter(s => s.status === 'completed').length}
+            {data.completedCount}
           </p>
         </article>
         <article className="rounded-xl border border-white/15 bg-white/5 p-4">
@@ -150,6 +220,30 @@ export default async function AnalyticsPage({
           <p className="mt-2 text-2xl font-semibold">{correctRate}%</p>
         </article>
       </div>
+      <article className="rounded-xl border border-white/15 bg-white/5 p-4">
+        <div className="flex items-center justify-between gap-3">
+          <h2 className="text-sm font-medium">Data Integrity Check</h2>
+          <p className="text-xs text-[var(--muted)]">
+            Completed sessions: {data.completedSessionsForAudit} | Flagged: {data.integrityFlags.length}
+          </p>
+        </div>
+        <p className="mt-2 text-xs text-[var(--muted)]">
+          Flags completed sessions with zero responses or very low response count (2 or less).
+        </p>
+        <div className="mt-3 grid gap-2 text-xs">
+          {data.integrityFlags.slice(0, 25).map((row) => (
+            <div key={row.participantSessionId} className="rounded-lg border border-amber-500/20 bg-amber-500/5 px-3 py-2">
+              <p className="font-medium">{row.participantSessionId}</p>
+              <p className="text-[var(--muted)]">
+                responses={row.responseCount} | completedAt={row.completedAt ?? "unknown"}
+              </p>
+            </div>
+          ))}
+          {!data.integrityFlags.length ? (
+            <p className="text-xs text-emerald-400">No suspiciously incomplete completed sessions detected.</p>
+          ) : null}
+        </div>
+      </article>
       <div className="grid gap-4 sm:grid-cols-3">
         <article className="rounded-xl border border-white/15 bg-white/5 p-4">
           <p className="text-xs uppercase tracking-[0.15em] text-[var(--muted)]">IAT Congruent Mean</p>
