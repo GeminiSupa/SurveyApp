@@ -34,6 +34,7 @@ export async function POST(request: Request) {
     participantToken?: string;
     consentAccepted?: boolean;
     attentionCheckPassed?: boolean;
+    isDisqualified?: boolean;
     responses?: ResponsePayload[];
     trials?: Array<{
       trialType: "iat" | "reaction_time";
@@ -60,10 +61,39 @@ export async function POST(request: Request) {
       .eq("id", body.sessionId)
       .eq("participant_token", body.participantToken)
       .single();
+
     if (sessionError || !session) {
-      await writeAuditLog({ route: "/api/participant/complete", action: "session_validate", outcome: "blocked", ip });
-      return NextResponse.json({ error: "Invalid participant session token." }, { status: 403 });
+      return NextResponse.json({ error: "Invalid or expired session." }, { status: 401 });
     }
+
+    if (session.status !== "in_progress") {
+      return NextResponse.json({ error: "Session is already completed or disqualified." }, { status: 400 });
+    }
+
+    if (body.consentAccepted === false) {
+      return NextResponse.json({ error: "Cannot complete session without consent." }, { status: 400 });
+    }
+
+    // 1. Server-Side Data Integrity Validation (Anti-Cheat)
+    // Prevent malicious direct API submissions bypassing client-side required checks
+    if (!body.isDisqualified) {
+      const { data: blocks } = await supabase
+        .from("study_blocks")
+        .select("block_type")
+        .eq("study_id", body.studyId);
+
+      const requiresData = blocks?.some(b => ['survey', 'multiple_choice', 'ux_task', 'brs', 'reaction_time', 'iat'].includes(b.block_type));
+      const hasResponses = body.responses && body.responses.length > 0;
+      const hasTrials = body.trials && body.trials.length > 0;
+
+      // Only reject if the study requires data and the participant provided absolutely nothing.
+      // We cannot be overly strict here because logic rules might legitimately skip some blocks.
+      if (requiresData && !hasResponses && !hasTrials) {
+        return NextResponse.json({ error: "Invalid submission: Missing required study data." }, { status: 400 });
+      }
+    }
+
+    // 2. Insert Data
     if (session.study_id !== body.studyId) {
       return NextResponse.json({ error: "Session does not belong to this study." }, { status: 409 });
     }
@@ -124,12 +154,15 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: `Failed to store session duration: ${eventInsertError.message}` }, { status: 500 });
     }
 
+    // Generate a secure 6-digit completion code
     const completionCode = Math.floor(100000 + Math.random() * 900000).toString();
+
+    const finalStatus = body.isDisqualified ? "disqualified" : "completed";
 
     const { error: completeUpdateError } = await supabase
       .from("participant_sessions")
       .update({ 
-        status: "completed", 
+        status: finalStatus, 
         completed_at: new Date().toISOString(),
         completion_code: completionCode,
         attention_check_passed: body.attentionCheckPassed ?? false

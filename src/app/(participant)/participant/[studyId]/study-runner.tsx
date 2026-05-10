@@ -389,7 +389,7 @@ export function StudyRunner({
     return { responseAdditions, responseMapAdditions };
   }
 
-  async function submitCompletion(allResponses: ResponseItem[], completionMessage: string) {
+  async function submitCompletion(allResponses: ResponseItem[], completionMessage: string, isDisqualifiedSession: boolean = false) {
     if (!sessionId || !participantToken) return false;
     setStatus("saving");
     const response = await fetch("/api/participant/complete", {
@@ -404,6 +404,7 @@ export function StudyRunner({
         responses: allResponses,
         trials,
         durationMs: Date.now() - sessionStartedAt,
+        isDisqualified: isDisqualifiedSession,
       }),
     });
     if (!response.ok) {
@@ -478,7 +479,7 @@ export function StudyRunner({
     const nextResponses = [...responses, ...(collected?.responseAdditions ?? [])];
     const dq = isDisqualified(disqualificationRules ?? [], nextResponseMap);
     if (dq.disqualified) {
-      const completed = await submitCompletion(nextResponses, dq.message || "You do not meet this study's eligibility requirements.");
+      const completed = await submitCompletion(nextResponses, dq.message || "You do not meet this study's eligibility requirements.", true);
       if (completed) setIsScreenedOut(true);
       return;
     }
