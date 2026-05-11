@@ -109,7 +109,7 @@ export async function POST(request: Request) {
     }
 
     if (body.responses.length) {
-      const { error: responseInsertError } = await supabase.from("responses").insert(
+      const { error: responseInsertError } = await supabase.from("responses").upsert(
         body.responses.map((item) => ({
           study_id: body.studyId,
           participant_session_id: body.sessionId,
@@ -119,6 +119,7 @@ export async function POST(request: Request) {
           numeric_value: item.numericValue,
           json_value: item.jsonValue,
         })),
+        { onConflict: "participant_session_id,question_key" }
       );
       if (responseInsertError) {
         return NextResponse.json({ error: `Failed to store responses: ${responseInsertError.message}` }, { status: 500 });

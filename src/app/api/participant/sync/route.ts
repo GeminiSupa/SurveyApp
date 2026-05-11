@@ -42,21 +42,9 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Invalid session." }, { status: 401 });
     }
 
-    // 2. Incremental Sync (Upsert Logic)
-    // We handle this by deleting existing responses for these keys and inserting the new ones.
-    // This avoids duplicates in the analytics.
-    const keysToSync = responses.map(r => r.questionKey);
-    
-    if (keysToSync.length > 0) {
-      // Cleanup old versions of these specific questions
-      await supabase
-        .from("responses")
-        .delete()
-        .eq("participant_session_id", sessionId)
-        .in("question_key", keysToSync);
-
-      // Insert new versions
-      const { error: insertError } = await supabase.from("responses").insert(
+    if (responses.length > 0) {
+      // Use atomic upsert to avoid duplicates and handle updates efficiently
+      const { error: upsertError } = await supabase.from("responses").upsert(
         responses.map((item) => ({
           study_id: studyId,
           participant_session_id: sessionId,
@@ -65,11 +53,12 @@ export async function POST(request: Request) {
           text_value: item.textValue,
           numeric_value: item.numericValue,
           json_value: item.jsonValue,
-        }))
+        })),
+        { onConflict: "participant_session_id,question_key" }
       );
 
-      if (insertError) {
-        return NextResponse.json({ error: insertError.message }, { status: 500 });
+      if (upsertError) {
+        return NextResponse.json({ error: upsertError.message }, { status: 500 });
       }
     }
 
