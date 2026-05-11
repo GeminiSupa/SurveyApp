@@ -110,12 +110,18 @@ export function StudyRunner({
       qs.forEach((q: any) => {
         const val = answers[q.id];
         if (val === undefined || val === null || String(val).trim() === "") return;
+        
         const key = q.questionKey || `${currentBlock.block_type}_${q.id}`;
+        // Map types to API expectations
+        const rType = q.surveyType === "mcq" || currentBlock.block_type === "multiple_choice" 
+          ? "mcq" 
+          : q.surveyType === "likert" ? "likert" : "text";
+
         additions.push({
           study_id: studyDbId,
           participant_session_id: sessionId,
           question_key: key,
-          response_type: typeof val === "number" ? "numeric" : "text",
+          response_type: rType,
           text_value: typeof val === "string" ? val : null,
           numeric_value: typeof val === "number" ? val : null,
           json_value: typeof val === "object" && val !== null ? val : null,
@@ -132,7 +138,7 @@ export function StudyRunner({
           study_id: studyDbId,
           participant_session_id: sessionId,
           question_key: `brs_${currentBlock.id}_${item.id}`,
-          response_type: "numeric",
+          response_type: "likert", // BRS is essentially a likert scale
           numeric_value: val,
           text_value: null,
         });
@@ -146,6 +152,16 @@ export function StudyRunner({
   function syncToServer(latestResponses: ResponseItem[], nextIdx: number, latestAnswers: Record<string, any>) {
     if (!sessionId || !participantToken) return;
     const snapshot = { ...latestAnswers, consent };
+    
+    // Map to camelCase for API
+    const mappedResponses = latestResponses.map(r => ({
+      questionKey: r.question_key,
+      responseType: r.response_type,
+      textValue: r.text_value,
+      numericValue: r.numeric_value,
+      jsonValue: r.json_value
+    }));
+
     fetch("/api/participant/sync", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -153,7 +169,7 @@ export function StudyRunner({
         studyId: studyDbId,
         sessionId,
         participantToken,
-        responses: latestResponses,
+        responses: mappedResponses,
         currentStep: nextIdx,
         answersSnapshot: snapshot,
       }),
@@ -164,15 +180,28 @@ export function StudyRunner({
   async function submitCompletion(finalResponses: ResponseItem[], isDisq = false) {
     if (!sessionId || !participantToken) return false;
     setStatus("saving");
+
+    // Map to camelCase for API
+    const mappedResponses = finalResponses.map(r => ({
+      questionKey: r.question_key,
+      responseType: r.response_type,
+      textValue: r.text_value,
+      numericValue: r.numeric_value,
+      jsonValue: r.json_value
+    }));
+
     try {
       const res = await fetch("/api/participant/complete", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          studyId: studyDbId, // Was missing!
           sessionId,
           participantToken,
-          responses: finalResponses,
+          responses: mappedResponses,
           isDisqualified: isDisq,
+          consentAccepted: consent,
+          durationMs: 0, // Could track this if needed
         }),
       });
       const data = await res.json();
