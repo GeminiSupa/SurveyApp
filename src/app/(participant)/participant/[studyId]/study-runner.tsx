@@ -66,7 +66,10 @@ export function StudyRunner({
 
       const res = await fetch("/api/participant/start", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { 
+          "Content-Type": "application/json",
+          "x-request-id": crypto.randomUUID()
+        },
         body: JSON.stringify({
           studyPublicId: studyId,
           magicToken,
@@ -74,7 +77,10 @@ export function StudyRunner({
           resumeToken: pToken,
         }),
       });
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        console.error("startSession failed:", res.status, data);
+      }
       if (data.sessionId) {
         setSessionId(data.sessionId);
         setParticipantToken(data.participantToken);
@@ -213,7 +219,10 @@ export function StudyRunner({
     try {
       const res = await fetch("/api/participant/complete", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { 
+          "Content-Type": "application/json",
+          "x-request-id": crypto.randomUUID()
+        },
         body: JSON.stringify({
           studyId: studyDbId,
           sessionId: sId,
