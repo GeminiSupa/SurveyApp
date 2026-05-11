@@ -43,9 +43,10 @@ export async function POST(request: Request) {
     }
 
     if (responses.length > 0) {
-      // Use atomic upsert to avoid duplicates and handle updates efficiently
-      const { error: upsertError } = await supabase.from("responses").upsert(
-        responses.map((item) => ({
+      // Deduplicate by question_key to avoid batch conflict errors in atomic upsert
+      const responseMap = new Map();
+      responses.forEach((item) => {
+        responseMap.set(item.questionKey, {
           study_id: studyId,
           participant_session_id: sessionId,
           question_key: item.questionKey,
@@ -53,9 +54,12 @@ export async function POST(request: Request) {
           text_value: item.textValue,
           numeric_value: item.numericValue,
           json_value: item.jsonValue,
-        })),
-        { onConflict: "participant_session_id,question_key" }
-      );
+        });
+      });
+
+      const { error: upsertError } = await supabase
+        .from("responses")
+        .upsert(Array.from(responseMap.values()), { onConflict: "participant_session_id,question_key" });
 
       if (upsertError) {
         return NextResponse.json({ error: upsertError.message }, { status: 500 });

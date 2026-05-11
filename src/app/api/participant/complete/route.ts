@@ -109,8 +109,10 @@ export async function POST(request: Request) {
     }
 
     if (body.responses.length) {
-      const { error: responseInsertError } = await supabase.from("responses").upsert(
-        body.responses.map((item) => ({
+      // Map and deduplicate by question_key to avoid "ON CONFLICT DO UPDATE command cannot affect row a second time"
+      const responseMap = new Map();
+      body.responses.forEach((item) => {
+        responseMap.set(item.questionKey, {
           study_id: body.studyId,
           participant_session_id: body.sessionId,
           question_key: item.questionKey,
@@ -118,9 +120,13 @@ export async function POST(request: Request) {
           text_value: item.textValue,
           numeric_value: item.numericValue,
           json_value: item.jsonValue,
-        })),
-        { onConflict: "participant_session_id,question_key" }
-      );
+        });
+      });
+
+      const { error: responseInsertError } = await supabase
+        .from("responses")
+        .upsert(Array.from(responseMap.values()), { onConflict: "participant_session_id,question_key" });
+
       if (responseInsertError) {
         return NextResponse.json({ error: `Failed to store responses: ${responseInsertError.message}` }, { status: 500 });
       }
