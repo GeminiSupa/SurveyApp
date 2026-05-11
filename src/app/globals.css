@@ -1,23 +1,26 @@
 @import "tailwindcss";
 
 :root {
-  --background: #070c1a;
-  --foreground: #ecf2ff;
-  --surface: rgba(20, 30, 55, 0.62);
-  --surface-border: rgba(161, 191, 255, 0.24);
-  --brand: #74a8ff;
-  --brand-strong: #4f85ff;
-  --muted: #9aa4bd;
+  --background: #050a14;
+  --foreground: #f0f4ff;
+  --surface: rgba(15, 23, 42, 0.7);
+  --surface-border: rgba(148, 163, 184, 0.1);
+  --brand: #60a5fa;
+  --brand-strong: #3b82f6;
+  --brand-glow: rgba(59, 130, 246, 0.3);
+  --muted: #64748b;
+  --success: #10b981;
+  --error: #ef4444;
 }
 
 [data-contrast="high"] {
   --background: #000000;
   --foreground: #ffffff;
-  --surface: rgba(255, 255, 255, 0.08);
-  --surface-border: rgba(255, 255, 255, 0.55);
-  --brand: #ffff00;
-  --brand-strong: #ffcc00;
-  --muted: #e0e0e0;
+  --surface: rgba(255, 255, 255, 0.05);
+  --surface-border: rgba(255, 255, 255, 0.8);
+  --brand: #fbbf24;
+  --brand-strong: #f59e0b;
+  --muted: #d1d5db;
 }
 
 @theme inline {
@@ -32,150 +35,144 @@ body {
   background: var(--background);
   color: var(--foreground);
   font-family: var(--font-geist-sans), sans-serif;
-}
-
-a {
-  color: inherit;
-}
-
-.glass-panel {
-  background: linear-gradient(155deg, rgba(128, 168, 255, 0.2), var(--surface));
-  border: 1px solid var(--surface-border);
-  backdrop-filter: blur(20px);
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
 }
 
 /* Mobile-first enhancements */
 @media (max-width: 640px) {
-  :root {
-    --text-base: 0.875rem;
-    --text-lg: 1.125rem;
-    --text-xl: 1.25rem;
+  html {
+    font-size: 14px;
   }
 }
 
-/* Button & Interaction Fixes */
+/* Base interactive elements */
 button {
   cursor: pointer;
   touch-action: manipulation;
   transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-  position: relative;
-  overflow: hidden;
+  user-select: none;
 }
 
 button:active {
-  transform: scale(0.98);
+  transform: scale(0.97);
 }
 
-/* Ensure text is ALWAYS visible on interactive elements */
+/* Glassmorphism Panel */
+.survey-card {
+  background: var(--surface);
+  border: 1px solid var(--surface-border);
+  backdrop-filter: blur(12px);
+  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.4);
+}
+
+/* Primary Button Styling */
 .btn-primary {
-  background-color: var(--brand-strong);
+  background: linear-gradient(135deg, var(--brand-strong), var(--brand));
   color: white !important;
-  font-weight: 600;
+  font-weight: 700;
+  letter-spacing: 0.025em;
+  box-shadow: 0 4px 14px 0 var(--brand-glow);
 }
 
-.btn-primary:hover {
-  background-color: var(--brand);
-  color: white !important;
-  box-shadow: 0 0 15px rgba(116, 168, 255, 0.4);
+.btn-primary:hover:not(:disabled) {
+  filter: brightness(1.1);
+  transform: translateY(-1px);
+  box-shadow: 0 6px 20px 0 var(--brand-glow);
 }
 
+.btn-primary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Option Buttons (MCQ/Likert) */
 .option-btn {
   background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  color: var(--foreground) !important;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: var(--foreground);
+  transition: all 0.2s ease;
 }
 
 .option-btn:hover {
-  background: rgba(255, 255, 255, 0.08);
-  border-color: var(--brand);
-  color: white !important;
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.2);
 }
 
 .option-btn[data-selected="true"] {
-  background: rgba(116, 168, 255, 0.15);
+  background: rgba(59, 130, 246, 0.1);
   border-color: var(--brand);
-  color: var(--brand) !important;
+  color: var(--brand);
   box-shadow: 0 0 0 1px var(--brand);
 }
 
-@keyframes slideIn {
+/* Likert Point Styling */
+.likert-point {
+  aspect-ratio: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 12px;
+  font-weight: 700;
+  font-size: 1.1rem;
+}
+
+/* Input Fields */
+input[type="text"],
+input[type="number"],
+textarea {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: white;
+  transition: all 0.2s ease;
+}
+
+input:focus,
+textarea:focus {
+  border-color: var(--brand);
+  background: rgba(255, 255, 255, 0.06);
+  outline: none;
+  box-shadow: 0 0 0 2px var(--brand-glow);
+}
+
+/* Animations */
+@keyframes stepIn {
   from {
-    transform: translateY(10px);
     opacity: 0;
+    transform: translateY(12px);
   }
   to {
-    transform: translateY(0);
     opacity: 1;
+    transform: translateY(0);
   }
 }
 
 .animate-step {
-  animation: slideIn 0.4s ease-out forwards;
+  animation: stepIn 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
-/* Marketing tool cards */
-.tool-card {
-  transition:
-    transform 0.25s cubic-bezier(0.4, 0, 0.2, 1),
-    border-color 0.25s cubic-bezier(0.4, 0, 0.2, 1),
-    box-shadow 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+/* Custom Scrollbar */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 5px;
+}
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.02);
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
 }
 
-.tool-card:hover {
-  transform: translateY(-3px);
-  border-color: rgba(116, 168, 255, 0.35);
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.35);
-}
-
-/* Band chips for results */
-.band-chip {
-  border-radius: 9999px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  padding: 0.25rem 0.6rem;
-  font-size: 10px;
-  font-weight: 800;
-  letter-spacing: 0.18em;
-  text-transform: uppercase;
-  background: rgba(255, 255, 255, 0.04);
-  color: rgba(255, 255, 255, 0.75);
-}
-
-.band-emerald {
-  border-color: rgba(16, 185, 129, 0.35);
-  background: rgba(16, 185, 129, 0.12);
-  color: rgba(110, 231, 183, 0.95);
-}
-
-.band-amber {
-  border-color: rgba(245, 158, 11, 0.35);
-  background: rgba(245, 158, 11, 0.12);
-  color: rgba(252, 211, 77, 0.95);
-}
-
-.band-rose {
-  border-color: rgba(244, 63, 94, 0.35);
-  background: rgba(244, 63, 94, 0.12);
-  color: rgba(251, 113, 133, 0.95);
-}
-
-.band-violet {
-  border-color: rgba(167, 139, 250, 0.35);
-  background: rgba(167, 139, 250, 0.12);
-  color: rgba(216, 180, 254, 0.95);
-}
-
-.band-blue {
-  border-color: rgba(116, 168, 255, 0.35);
-  background: rgba(116, 168, 255, 0.12);
-  color: rgba(186, 210, 255, 0.95);
-}
+/* Typography Fluidity */
+h1 { font-size: clamp(1.5rem, 5vw, 2.25rem); }
+h2 { font-size: clamp(1.25rem, 4vw, 1.75rem); }
+p { font-size: 1rem; line-height: 1.6; }
 
 @media (prefers-reduced-motion: reduce) {
-  .tool-card,
-  button {
-    transition: none;
-  }
-  .animate-step {
-    animation: none;
+  * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }

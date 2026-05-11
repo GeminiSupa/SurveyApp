@@ -27,11 +27,51 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Supabase admin client not configured." }, { status: 500 });
   }
 
-  const body = (await request.json().catch(() => null)) as { studyPublicId?: string; magicToken?: string } | null;
+  const body = (await request.json().catch(() => null)) as { 
+    studyPublicId?: string; 
+    magicToken?: string;
+    resumeSessionId?: string;
+    resumeToken?: string;
+  } | null;
   const studyPublicId = body?.studyPublicId;
   const magicToken = body?.magicToken;
+  const resumeSessionId = body?.resumeSessionId;
+  const resumeToken = body?.resumeToken;
+
   if (!studyPublicId) {
     return NextResponse.json({ error: "studyPublicId required." }, { status: 400 });
+  }
+
+  // 0. Handle Resumption
+  if (resumeSessionId && resumeToken) {
+    const { data: existing, error: resumeError } = await supabase
+      .from("participant_sessions")
+      .select("id, participant_token, status, current_step, answers_snapshot")
+      .eq("id", resumeSessionId)
+      .eq("participant_token", resumeToken)
+      .single();
+
+    if (existing && existing.status === "in_progress") {
+      // Fetch existing responses for this session to pre-populate results state
+      const { data: existingResponses } = await supabase
+        .from("responses")
+        .select("question_key, response_type, text_value, numeric_value, json_value")
+        .eq("participant_session_id", existing.id);
+
+      return NextResponse.json({ 
+        sessionId: existing.id, 
+        participantToken: existing.participant_token,
+        currentStep: existing.current_step || 0,
+        answersSnapshot: existing.answers_snapshot || {},
+        existingResponses: (existingResponses || []).map(r => ({
+          question_key: r.question_key,
+          response_type: r.response_type,
+          text_value: r.text_value,
+          numeric_value: r.numeric_value,
+          json_value: r.json_value,
+        }))
+      });
+    }
   }
 
   const { data: study, error: studyError } = await supabase

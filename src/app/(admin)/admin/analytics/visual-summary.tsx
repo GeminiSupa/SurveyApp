@@ -1,5 +1,5 @@
-
 "use client";
+import React from "react";
 
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 import { BarChart3, PieChart, Layout, Download } from 'lucide-react';
@@ -53,7 +53,14 @@ export function VisualSummary({ responses, blocks }: { responses: any[], blocks:
     summary[label].counts[val] = (summary[label].counts[val] || 0) + 1;
   });
 
+  const [mounted, setMounted] = React.useState(false);
+  React.useEffect(() => {
+    setMounted(true);
+  }, []);
+
   const chartSections = Object.values(summary);
+
+  if (!mounted) return <div className="h-[400px] flex items-center justify-center text-white/10 uppercase tracking-widest text-[10px] font-bold">Initializing Charts...</div>;
 
   return (
     <div className="space-y-8">
@@ -92,8 +99,8 @@ export function VisualSummary({ responses, blocks }: { responses: any[], blocks:
                 {section.question}
               </h3>
               
-              <div className="h-[200px] w-full">
-                <ResponsiveContainer width="100%" height="100%">
+              <div className="h-[200px] w-full min-h-[200px]">
+                <ResponsiveContainer width="100%" height="100%" minWidth={0}>
                   <BarChart data={chartData} layout="vertical" margin={{ left: 0, right: 30 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#ffffff10" horizontal={false} />
                     <XAxis type="number" hide />

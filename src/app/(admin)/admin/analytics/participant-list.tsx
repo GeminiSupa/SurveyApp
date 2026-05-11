@@ -70,9 +70,13 @@ export function ParticipantList({
       // Find the session in the sessions list to get metadata
       const s = sessions.find(sess => sess.id === sessionId);
       
-      const res = await fetch(`/api/admin/export?studyId=${studyId}`);
+      // Fetch responses directly for this session (more reliable than export API)
+      const res = await fetch(`/api/admin/sessions/${sessionId}/responses?t=${Date.now()}`);
       const data = await res.json();
-      const sessionData = data.rows.find((r: any) => r.ParticipantID === sessionId);
+      
+      if (!res.ok) throw new Error(data.error || "Failed to fetch responses");
+
+      const sessionResponses = data.responses || [];
       
       // Build metadata list
       const meta = [
@@ -83,13 +87,14 @@ export function ParticipantList({
         { key: "Language", value: s?.locale || "unknown" },
       ];
       
-      // Convert wide row back to key-value pairs for display
-      const kv = Object.entries(sessionData || {})
-        .filter(([key]) => !['ParticipantID', 'StartedAt', 'CompletedAt', 'Status', 'Device', 'Locale'].includes(key))
-        .map(([key, value]) => ({ 
-          key: questionMap[key] || key.replace(/_/g, ' '), 
-          value 
-        }));
+      // Convert response rows to key-value pairs
+      const kv = sessionResponses.map((r: any) => {
+        const val = r.numeric_value !== null ? r.numeric_value : (r.text_value || (r.json_value ? JSON.stringify(r.json_value) : ""));
+        return {
+          key: questionMap[r.question_key] || r.question_key.replace(/_/g, ' '),
+          value: val
+        };
+      });
         
       setResponses([...meta, ...kv]);
     } catch (err) {

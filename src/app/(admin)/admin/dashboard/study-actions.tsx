@@ -1,8 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { Trash2, Loader2, Copy } from "lucide-react";
+import { Trash2, Loader2, Copy, Download } from "lucide-react";
 import { useRouter } from "next/navigation";
+import { exportStudyToCsv } from "@/lib/export-utils";
 
 export function StudyActions({ studyId }: { studyId: string }) {
   const [isDeleting, setIsDeleting] = useState(false);
@@ -63,8 +64,41 @@ export function StudyActions({ studyId }: { studyId: string }) {
     }
   }
 
+  async function handleDownload() {
+    if (!studyId) return;
+    
+    try {
+      // We need to fetch the study title and config (blocks) for mapping
+      const res = await fetch(`/api/admin/studies/${studyId}`);
+      const data = await res.json();
+      
+      if (!res.ok) throw new Error(data.error || "Failed to fetch study details");
+      
+      // Map study_blocks to the format expected by exportStudyToCsv
+      const blocks = (data.study_blocks || []).map((b: any) => ({
+        id: b.id,
+        blockType: b.block_type,
+        label: b.label,
+        config: b.config
+      }));
+      
+      // Default to downloading only completed sessions for a cleaner export
+      await exportStudyToCsv(studyId, `${data.title} (Completed)`, blocks, "completed");
+    } catch (err) {
+      console.error(err);
+      alert("Failed to download results.");
+    }
+  }
+
   return (
     <div className="flex items-center gap-1">
+      <button
+        onClick={handleDownload}
+        className="p-1.5 rounded-lg hover:bg-emerald-500/10 text-white/30 hover:text-emerald-400 transition-all"
+        title="Download Results (CSV)"
+      >
+        <Download className="w-3.5 h-3.5" />
+      </button>
       <button
         onClick={handleDuplicate}
         disabled={isDuplicating || isDeleting}

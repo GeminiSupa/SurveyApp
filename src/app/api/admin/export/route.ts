@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server";
-import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { getAuthenticatedUserId } from "@/lib/supabase/server";
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const studyId = searchParams.get("studyId");
+  const statusFilter = searchParams.get("status");
 
   if (!studyId) {
     return NextResponse.json({ error: "Missing studyId" }, { status: 400 });
@@ -15,50 +15,76 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const supabase = await createServerSupabaseClient();
+  const { createAdminSupabaseClient } = await import("@/lib/supabase/admin");
+  const supabase = createAdminSupabaseClient();
   if (!supabase) {
     return NextResponse.json({ error: "Supabase not configured" }, { status: 500 });
   }
 
-  // Fetch all participant sessions so exports include sessions even when
-  // response rows are missing or partially written.
-  const { data: sessions, error: sessionError } = await supabase
+  // 1. Fetch sessions
+  let sessionQuery = supabase
     .from("participant_sessions")
     .select("id, started_at, completed_at, status, device, locale")
     .eq("study_id", studyId)
     .order("started_at", { ascending: true });
-
-  if (sessionError) {
-    return NextResponse.json({ error: sessionError.message }, { status: 500 });
+  
+  if (statusFilter) {
+    sessionQuery = sessionQuery.eq("status", statusFilter);
   }
 
-  // Fetch responses and merge into the session rows.
-  const { data: responses, error: responseError } = await supabase
-    .from("responses")
-    .select(`
-      participant_session_id, 
-      question_key, 
-      response_type, 
-      text_value, 
-      numeric_value, 
-      json_value, 
-      created_at,
-      participant_sessions (
-        started_at,
-        completed_at,
-        status,
-        device,
-        locale
-      )
-    `)
-    .eq("study_id", studyId)
-    .order("created_at", { ascending: true });
+  const { data: sessions, error: sessionError } = await sessionQuery.limit(2000);
+  if (sessionError) return NextResponse.json({ error: sessionError.message }, { status: 500 });
 
-  if (responseError) {
-    return NextResponse.json({ error: responseError.message }, { status: 500 });
+  const sessionIds = (sessions ?? []).map(s => s.id);
+  if (sessionIds.length === 0) {
+    return NextResponse.json({ rows: [], meta: { totalParticipants: 0 } });
   }
 
-  // Pivot data into Wide Format (One row per session)
+  // 2. Fetch responses with PAGINATION to bypass the 1000-row server limit
+  const allResponses: any[] = [];
+  let from = 0;
+  const PAGE_SIZE = 1000;
+  let hasMore = true;
+
+  while (hasMore) {
+    const { data: pageData, error: pageError } = await supabase
+      .from("responses")
+      .select(`
+        participant_session_id, 
+        question_key, 
+        response_type, 
+        text_value, 
+        numeric_value, 
+        json_value, 
+        created_at
+      `)
+      .in("participant_session_id", sessionIds)
+      .order("created_at", { ascending: true })
+      .range(from, from + PAGE_SIZE - 1);
+
+    if (pageError) {
+      console.error("[Export] Pagination error:", pageError);
+      break;
+    }
+
+    if (pageData && pageData.length > 0) {
+      allResponses.push(...pageData);
+      if (pageData.length < PAGE_SIZE) {
+        hasMore = false;
+      } else {
+        from += PAGE_SIZE;
+      }
+    } else {
+      hasMore = false;
+    }
+
+    // Safety break to prevent infinite loops
+    if (from > 100000) break;
+  }
+
+  console.log(`[Export] Successfully fetched ${allResponses.length} total responses for ${sessionIds.length} sessions.`);
+
+  // 3. Build the Wide-Format Map
   const sessionsMap: Record<string, any> = {};
 
   (sessions ?? []).forEach((s) => {
@@ -72,44 +98,37 @@ export async function GET(request: Request) {
     };
   });
 
-  (responses ?? []).forEach((r) => {
+  allResponses.forEach((r) => {
     const sid = r.participant_session_id;
-    if (!sessionsMap[sid]) {
-      // Fallback for orphaned response rows.
-      const s = Array.isArray(r.participant_sessions) ? r.participant_sessions[0] : r.participant_sessions;
-      
-      sessionsMap[sid] = {
-        ParticipantID: sid,
-        StartedAt: s?.started_at,
-        CompletedAt: s?.completed_at,
-        Status: s?.status,
-        Device: s?.device || "unknown",
-        Locale: s?.locale || "unknown",
-      };
-    }
-    
-    // Determine the value to show (prefer numeric, then text, then JSON)
-    let value = "";
-    if (r.numeric_value !== null && r.numeric_value !== undefined) {
-      value = r.numeric_value;
-    } else if (r.text_value) {
-      value = r.text_value;
-    } else if (r.json_value) {
-      value = typeof r.json_value === 'string' ? r.json_value : JSON.stringify(r.json_value);
-    }
+    if (sessionsMap[sid]) {
+      let value: any = "";
+      if (r.numeric_value !== null && r.numeric_value !== undefined) {
+        value = r.numeric_value;
+      } else if (r.text_value) {
+        value = r.text_value;
+      } else if (r.json_value) {
+        value = typeof r.json_value === 'string' ? r.json_value : JSON.stringify(r.json_value);
+      }
 
-    // Use question_key as the column header
-    const columnHeader = r.question_key || "unknown_question";
-    sessionsMap[sid][columnHeader] = value;
+      const columnHeader = r.question_key || "unknown_question";
+      sessionsMap[sid][columnHeader] = value;
+    }
   });
 
   const wideRows = Object.values(sessionsMap);
 
   return NextResponse.json({ 
     rows: wideRows,
+    sessionsMap,
     meta: {
       totalParticipants: wideRows.length,
-      exportTime: new Date().toISOString()
+      totalResponses: allResponses.length,
+      exportTime: new Date().toISOString(),
+      filter: statusFilter || "all"
+    }
+  }, {
+    headers: {
+      "Cache-Control": "no-store, max-age=0"
     }
   });
 }

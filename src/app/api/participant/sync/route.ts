@@ -24,9 +24,9 @@ export async function POST(request: Request) {
     if (!supabase) return NextResponse.json({ error: "Supabase admin not configured." }, { status: 500 });
 
     const body = await request.json().catch(() => null);
-    const { studyId, sessionId, participantToken, responses } = body || {};
+    const { studyId, sessionId, participantToken, responses, currentStep, answersSnapshot } = body || {};
 
-    if (!studyId || !sessionId || !participantToken || !Array.isArray(responses)) {
+    if (!sessionId || !participantToken) {
       return NextResponse.json({ error: "Invalid sync payload." }, { status: 400 });
     }
 
@@ -42,7 +42,19 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Invalid session." }, { status: 401 });
     }
 
-    if (responses.length > 0) {
+    // 2. Update session state (step and snapshot)
+    if (typeof currentStep === "number" || answersSnapshot) {
+      await supabase
+        .from("participant_sessions")
+        .update({
+          current_step: currentStep,
+          answers_snapshot: answersSnapshot
+        })
+        .eq("id", sessionId);
+    }
+
+    // 3. Sync responses
+    if (Array.isArray(responses) && responses.length > 0) {
       // Deduplicate by question_key to avoid batch conflict errors in atomic upsert
       const responseMap = new Map();
       responses.forEach((item) => {
