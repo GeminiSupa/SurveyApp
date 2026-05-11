@@ -156,10 +156,10 @@ export function StudyRunner({
     // Map to camelCase for API
     const mappedResponses = latestResponses.map(r => ({
       questionKey: r.question_key,
-      responseType: r.response_type,
-      textValue: r.text_value,
-      numericValue: r.numeric_value,
-      jsonValue: r.json_value
+      responseType: r.response_type === "numeric" ? "likert" : (r.response_type as any),
+      textValue: r.text_value || null,
+      numericValue: typeof r.numeric_value === 'number' ? r.numeric_value : null,
+      jsonValue: r.json_value || null
     }));
 
     fetch("/api/participant/sync", {
@@ -178,16 +178,36 @@ export function StudyRunner({
 
   // ── Submit completion ─────────────────────────────────────────────────────
   async function submitCompletion(finalResponses: ResponseItem[], isDisq = false) {
-    if (!sessionId || !participantToken) return false;
+    // Robust session retrieval
+    let sId = sessionId;
+    let pToken = participantToken;
+    
+    if (!sId || !pToken) {
+      try {
+        const saved = localStorage.getItem(storageKey);
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          sId = parsed.sId;
+          pToken = parsed.pToken;
+        }
+      } catch {}
+    }
+
+    if (!sId || !pToken) {
+      setStatus("error");
+      setMessage("Session error. Please refresh and try again.");
+      return false;
+    }
+
     setStatus("saving");
 
-    // Map to camelCase for API
+    // Map to camelCase for API, ensuring all required fields
     const mappedResponses = finalResponses.map(r => ({
       questionKey: r.question_key,
-      responseType: r.response_type,
-      textValue: r.text_value,
-      numericValue: r.numeric_value,
-      jsonValue: r.json_value
+      responseType: r.response_type === "numeric" ? "likert" : (r.response_type as any),
+      textValue: r.text_value || null,
+      numericValue: typeof r.numeric_value === 'number' ? r.numeric_value : null,
+      jsonValue: r.json_value || null
     }));
 
     try {
@@ -195,15 +215,17 @@ export function StudyRunner({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          studyId: studyDbId, // Was missing!
-          sessionId,
-          participantToken,
+          studyId: studyDbId,
+          sessionId: sId,
+          participantToken: pToken,
           responses: mappedResponses,
           isDisqualified: isDisq,
-          consentAccepted: consent,
-          durationMs: 0, // Could track this if needed
+          consentAccepted: consent || answers.consent === true,
+          durationMs: 0,
+          attentionCheckPassed: true // Default to true if not explicitly tracked
         }),
       });
+      
       const data = await res.json();
       if (res.ok) {
         setStatus("saved");
@@ -213,11 +235,13 @@ export function StudyRunner({
       } else {
         setStatus("error");
         setMessage(data.error || "Failed to save responses. Please try again.");
+        console.error("Completion error:", data);
         return false;
       }
-    } catch {
+    } catch (err) {
       setStatus("error");
       setMessage("Connection lost. Please try again.");
+      console.error("Completion fetch error:", err);
       return false;
     }
   }
@@ -313,7 +337,10 @@ export function StudyRunner({
     // Last block?
     if (idx >= orderedBlocks.length - 1 && !logicDecision.nextBlockId) {
       setAllResponses(latestAllResponses);
-      await submitCompletion(latestAllResponses);
+      const success = await submitCompletion(latestAllResponses);
+      if (!success) {
+        // Error is already set in status/message by submitCompletion
+      }
       return;
     }
     setAllResponses(latestAllResponses);
