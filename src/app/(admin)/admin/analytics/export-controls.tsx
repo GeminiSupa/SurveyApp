@@ -76,8 +76,9 @@ export function ExportControls({ studyId, studyTitle, blocks = [] }: { studyId: 
       );
       const csvContent = [headers, ...csvRows].join("\n");
       
-      // Trigger download
-      const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+      // Trigger download with BOM for Excel UTF-8 support
+      const BOM = "\uFEFF";
+      const blob = new Blob([BOM + csvContent], { type: "text/csv;charset=utf-8;" });
       const link = document.createElement("a");
       const url = URL.createObjectURL(blob);
       link.setAttribute("href", url);
@@ -99,29 +100,49 @@ export function ExportControls({ studyId, studyTitle, blocks = [] }: { studyId: 
   };
 
   return (
-    <article className="rounded-xl border border-white/15 bg-white/5 p-4 flex flex-col gap-3">
-      <p className="text-xs uppercase tracking-[0.15em] text-[var(--muted)]">Export & Reports</p>
-      <div className="grid grid-cols-2 gap-3 mt-1">
+    <article className="rounded-2xl border border-white/15 bg-white/5 p-6 space-y-6 overflow-hidden relative group">
+      <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+        <Download className="w-12 h-12" />
+      </div>
+      
+      <div className="space-y-1">
+        <h3 className="text-sm font-bold text-white uppercase tracking-wider">Export & Research Data</h3>
+        <p className="text-[10px] text-white/40">Download raw participant responses for external analysis.</p>
+      </div>
+
+      <div className="grid grid-cols-1 gap-3">
         <button
           onClick={downloadCsv}
           disabled={isExporting}
-          className="flex items-center justify-center gap-2 rounded-lg bg-[var(--brand)] px-3 py-2.5 text-sm font-semibold text-white hover:opacity-90 transition-all disabled:opacity-50"
+          className="relative flex items-center justify-between gap-2 rounded-xl bg-[var(--brand)] px-4 py-4 text-sm font-bold text-white hover:brightness-110 active:scale-[0.98] transition-all disabled:opacity-50 shadow-lg shadow-[var(--brand)]/20"
         >
-          <Download className="w-4 h-4" />
-          {isExporting ? "Exporting..." : "Excel / SPSS (.csv)"}
+          <div className="flex items-center gap-3">
+            <div className="bg-white/20 p-1.5 rounded-lg">
+              <Download className="w-4 h-4" />
+            </div>
+            <span>{isExporting ? "Preparing Data..." : "Download CSV Data"}</span>
+          </div>
+          <span className="text-[10px] bg-black/20 px-2 py-0.5 rounded-md font-mono">.CSV</span>
         </button>
+        
         <button
           onClick={printReport}
-          className="flex items-center justify-center gap-2 rounded-lg bg-white/10 border border-white/10 px-3 py-2.5 text-sm font-medium hover:bg-white/15 transition-all"
+          className="flex items-center justify-center gap-2 rounded-xl bg-white/5 border border-white/10 px-4 py-3 text-sm font-medium hover:bg-white/10 hover:border-white/20 transition-all text-white/80"
         >
-          <Printer className="w-4 h-4" />
-          PDF Report
+          <Printer className="w-4 h-4 text-white/40" />
+          Generate PDF Report
         </button>
       </div>
-      <p className="text-[10px] text-[var(--muted)] text-center">
-        Pivoted wide-format. One row per participant.<br/>
-        Perfect for SPSS Variable View and Excel Analysis.
-      </p>
+
+      <div className="pt-4 border-t border-white/5 space-y-3">
+        <div className="flex items-center gap-2 text-[10px] text-white/40">
+          <FileText className="w-3 h-3" />
+          <span>Optimized for Excel, SPSS, and R</span>
+        </div>
+        <p className="text-[9px] leading-relaxed text-white/30 italic">
+          Data is exported in wide-format (one row per participant) with all survey answers and session metadata included.
+        </p>
+      </div>
     </article>
   );
 }
