@@ -98,37 +98,87 @@ export async function GET(request: Request) {
     };
   });
 
+  // ─────────────────────────────────────────────────────────────────────────
+  // KEY CANONICALIZATION
+  // Early participants (first ~25) had responses stored with keys like
+  //   "likert_<uuid>", "mcq_<uuid>", "text_<uuid>"
+  // because block_type was the question sub-type at the time of submission.
+  // Later participants used "survey_<uuid>" after a code change.
+  // These all refer to the SAME question — we normalise to "survey_<uuid>"
+  // so every participant lands in the same column.
+  //
+  // Other prefixes that can vary for the same underlying question UUID:
+  //   likert_ / mcq_ / text_ / open_text_ / multiple_choice_
+  //   → all canonicalize to survey_<uuid>
+  //
+  // BRS keys (brs_<blockId>_<itemId>) are already consistent — leave them.
+  // ─────────────────────────────────────────────────────────────────────────
+
+  const LEGACY_SURVEY_PREFIXES = [
+    "likert_",
+    "mcq_",
+    "text_",
+    "open_text_",
+    "multiple_choice_",
+  ];
+
+  /**
+   * Strips a legacy type-prefix from a key and replaces it with "survey_".
+   * Only applies when the remainder looks like a UUID (8-4-4-4-12 hex).
+   * Keys that are already canonical (survey_, brs_, etc.) are returned as-is.
+   */
+  function canonicalizeKey(rawKey: string): string {
+    const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    for (const prefix of LEGACY_SURVEY_PREFIXES) {
+      if (rawKey.startsWith(prefix)) {
+        const remainder = rawKey.slice(prefix.length);
+        if (UUID_RE.test(remainder)) {
+          return `survey_${remainder}`;
+        }
+      }
+    }
+    return rawKey; // already canonical or not a known legacy key
+  }
+
   allResponses.forEach((r) => {
     const sid = r.participant_session_id;
     if (sessionsMap[sid]) {
       let value: any = "";
       if (r.numeric_value !== null && r.numeric_value !== undefined) {
+        // Numeric — keep as number
         value = r.numeric_value;
-      } else if (r.text_value) {
+      } else if (r.text_value !== null && r.text_value !== undefined && r.text_value !== "") {
         value = r.text_value;
-      } else if (r.json_value) {
-        value = typeof r.json_value === 'string' ? r.json_value : JSON.stringify(r.json_value);
+      } else if (r.json_value !== null && r.json_value !== undefined) {
+        // Keep as parsed value — do NOT stringify here; the export client will flatten it
+        value = r.json_value;
       }
 
-      const columnHeader = r.question_key || "unknown_question";
-      sessionsMap[sid][columnHeader] = value;
+      // Normalize the key so early & late participants share the same column
+      const columnHeader = canonicalizeKey(r.question_key || "unknown_question");
+
+      // Only write if this is the first (earliest) response for this key in the session
+      if (sessionsMap[sid][columnHeader] === undefined) {
+        sessionsMap[sid][columnHeader] = value;
+      }
     }
   });
+
 
   const wideRows = Object.values(sessionsMap);
 
-  return NextResponse.json({ 
-    rows: wideRows,
-    sessionsMap,
-    meta: {
-      totalParticipants: wideRows.length,
-      totalResponses: allResponses.length,
-      exportTime: new Date().toISOString(),
-      filter: statusFilter || "all"
+  return NextResponse.json(
+    {
+      rows: wideRows,
+      meta: {
+        totalParticipants: wideRows.length,
+        totalResponses: allResponses.length,
+        exportTime: new Date().toISOString(),
+        filter: statusFilter || "all",
+      },
+    },
+    {
+      headers: { "Cache-Control": "no-store, max-age=0" },
     }
-  }, {
-    headers: {
-      "Cache-Control": "no-store, max-age=0"
-    }
-  });
+  );
 }

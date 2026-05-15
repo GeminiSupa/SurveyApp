@@ -48,7 +48,7 @@ export function ExportControls({ studyId, studyTitle, blocks = [] }: { studyId: 
             </div>
             <span>{isExporting ? "Preparing..." : "Download Completed (21)"}</span>
           </div>
-          <span className="text-[10px] bg-black/20 px-2 py-0.5 rounded-md font-mono">.CSV</span>
+          <span className="text-[10px] bg-black/20 px-2 py-0.5 rounded-md font-mono">.XLSX</span>
         </button>
 
         <button
@@ -77,7 +77,7 @@ export function ExportControls({ studyId, studyTitle, blocks = [] }: { studyId: 
           <span>Optimized for Excel, SPSS, and R</span>
         </div>
         <p className="text-[9px] leading-relaxed text-white/30 italic">
-          Data is exported in wide-format (one row per participant) with all survey answers and session metadata included.
+          Exported as a native Excel (.xlsx) file — one row per participant, proper date columns, and clean question headers. Opens directly in Excel, Google Sheets, and SPSS without data loss.
         </p>
       </div>
     </article>
